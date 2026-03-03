@@ -1,0 +1,14 @@
+{
+  "name": "field-project",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "backend"
+  ],
+  "scripts": {
+    "dev:user": "npm run dev --workspace=user-app",
+    "dev:worker": "npm run dev --workspace=worker-app",
+    "dev:admin": "npm run dev --workspace=admin-app"
+  }
+}
