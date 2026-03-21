@@ -1,4 +1,5 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -13,6 +14,7 @@ import {
     Leaf,
     Menu,
 } from "lucide-react";
+import { clearResult, runScan } from "../features/aidetection/aidetectionSlice";
 
 /* ─── Waste category config ──────────────────────────────── */
 const CATEGORIES = {
@@ -37,19 +39,6 @@ const CATEGORIES = {
         label: "🗑️ General Waste",
     },
 };
-
-/* ─── Mock AI analysis (replace with real API call) ──────── */
-const mockAnalyse = () =>
-    new Promise(resolve => {
-        setTimeout(() => {
-            resolve({
-                wasteType: "Plastic Bottle",
-                category: "Recyclable",
-                disposeIn: "Dry Waste Bin (Blue)",
-                nearestBin: "150 meters away",
-            });
-        }, 2200);
-    });
 
 /* ─── Result Card ────────────────────────────────────────── */
 function ResultCard({ photo, result, onScanAnother, t }) {
@@ -138,18 +127,28 @@ function ResultCard({ photo, result, onScanAnother, t }) {
 
 /* ─── Main Page ──────────────────────────────────────────── */
 export default function AIScannerPage() {
+    const dispatch = useDispatch();
     const navigate = useNavigate();
     const { t } = useTranslation();
+    const ai = useSelector((s) => s.aidetection);
     const fileInputRef = useRef(null);
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
 
     const [phase, setPhase] = useState("idle"); // idle | analysing | result
     const [photo, setPhoto] = useState(null);
-    const [result, setResult] = useState(null);
     const [cameraStream, setCameraStream] = useState(null);
     const [showCamera, setShowCamera] = useState(false);
     const [error, setError] = useState(null);
+    const result = useMemo(() => {
+        if (!ai.result) return null;
+        return {
+            wasteType: ai.result.waste_type || "-",
+            category: ai.result.category || "General Waste",
+            disposeIn: Array.isArray(ai.result.steps) ? ai.result.steps.join(" • ") : (ai.result.tip || "-"),
+            nearestBin: ai.result.tip || "-",
+        };
+    }, [ai.result]);
 
     /* Attempt live camera; fallback to file input */
     const handleScanTap = useCallback(async () => {
@@ -181,7 +180,9 @@ export default function AIScannerPage() {
         setCameraStream(null);
         setShowCamera(false);
 
-        await runAnalysis(dataUrl);
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+        await runAnalysis(dataUrl, file);
     }, [cameraStream]);
 
     /* Handle file picker fallback */
@@ -190,22 +191,21 @@ export default function AIScannerPage() {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = async ev => {
-            await runAnalysis(ev.target.result);
+            await runAnalysis(ev.target.result, file);
         };
         reader.readAsDataURL(file);
         // Reset input so same file can trigger again
         e.target.value = "";
-    }, []);
+    }, [dispatch, t]);
 
-    const runAnalysis = async dataUrl => {
+    const runAnalysis = async (dataUrl, imageFile) => {
         setPhoto(dataUrl);
         setPhase("analysing");
         try {
-            const res = await mockAnalyse(dataUrl);
-            setResult(res);
+            await dispatch(runScan(imageFile)).unwrap();
             setPhase("result");
-        } catch {
-            setError("Could not analyse image. Please try again.");
+        } catch (e) {
+            setError(e || t("aiScannerPage.error"));
             setPhase("idle");
         }
     };
@@ -213,7 +213,7 @@ export default function AIScannerPage() {
     const reset = () => {
         setPhase("idle");
         setPhoto(null);
-        setResult(null);
+        dispatch(clearResult());
         setError(null);
     };
 
