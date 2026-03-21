@@ -79,7 +79,13 @@ const resources = {
         editName: "Edit name",
         saveName: "Save"
       },
-      chatbot: "Open Waste Chatbot",
+      chatbot: {
+        title: "Waste Assistant",
+        placeholder: "Ask about waste management...",
+        welcome: "Hi! I'm your Waste Assistant. Ask me anything about waste disposal, recycling, or sanitation.",
+        send: "Send"
+      },
+      chatbotOpen: "Open Waste Chatbot",
       aiScannerPage: {
         title: "AI Waste Scanner",
         subtitle: "Identify waste & dispose it right",
@@ -214,7 +220,13 @@ const resources = {
         editName: "नाम बदलें",
         saveName: "सहेजें"
       },
-      chatbot: "वेस्ट चैटबॉट खोलें",
+      chatbot: {
+        title: "वेस्ट सहायक",
+        placeholder: "कचरा प्रबंधन के बारे में पूछें...",
+        welcome: "नमस्ते! मैं आपका वेस्ट सहायक हूँ। कचरा निपटान, रीसाइक्लिंग या स्वच्छता के बारे में पूछें।",
+        send: "भेजें"
+      },
+      chatbotOpen: "वेस्ट चैटबॉट खोलें",
       aiScannerPage: {
         title: "एआई वेस्ट स्कैनर",
         subtitle: "कचरा पहचानें और सही तरीके से निपटाएं",
@@ -349,7 +361,13 @@ const resources = {
         editName: "नाव बदला",
         saveName: "जतन करा"
       },
-      chatbot: "वेस्ट चॅटबॉट उघडा",
+      chatbot: {
+        title: "वेस्ट सहाय्यक",
+        placeholder: "कचरा व्यवस्थापनाबद्दल विचारा...",
+        welcome: "नमस्कार! मी तुमचा वेस्ट सहाय्यक आहे. कचरा विल्हेवाट, पुनर्वापर किंवा स्वच्छतेबद्दल विचारा.",
+        send: "पाठवा"
+      },
+      chatbotOpen: "वेस्ट चॅटबॉट उघडा",
       aiScannerPage: {
         title: "एआय वेस्ट स्कॅनर",
         subtitle: "कचरा ओळखा आणि योग्य प्रकारे विल्हेवाट लावा",

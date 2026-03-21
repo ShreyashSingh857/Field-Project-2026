@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
 	AlertTriangle,
@@ -16,6 +17,8 @@ import {
 	X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toggleChatbot } from "../features/chatbot/chatbotSlice";
+import Chatbot from "../components/Chatbot";
 
 const LOGO_SRC = "/Logo.png";
 
@@ -26,6 +29,7 @@ const languageOptions = [
 ];
 
 export default function Dashboard() {
+	const dispatch = useDispatch();
 	const { t, i18n } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const navigate = useNavigate();
@@ -269,11 +273,13 @@ export default function Dashboard() {
 				{/* ── Floating Chatbot FAB ── */}
 				<button
 					type="button"
+					onClick={() => dispatch(toggleChatbot())}
 					className="clay-fab absolute bottom-4 right-4 inline-flex h-14 w-14 items-center justify-center text-green-50 sm:bottom-5 sm:right-5"
-					aria-label={t("chatbot")}
+					aria-label={t("chatbotOpen")}
 				>
 					<MessageCircle className="h-6 w-6" />
 				</button>
+				<Chatbot />
 			</div>
 		</div>
 	);
