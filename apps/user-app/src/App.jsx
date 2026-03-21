@@ -10,10 +10,22 @@ function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    dispatch(initAuth());
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       dispatch(setUser(session?.user ?? null));
     });
+
+    const bootstrapAuth = async () => {
+      const code = new URLSearchParams(window.location.search).get('code');
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+        const clean = `${window.location.origin}${window.location.pathname}`;
+        window.history.replaceState({}, '', clean);
+      }
+      dispatch(initAuth());
+    };
+
+    bootstrapAuth();
+
     return () => subscription.unsubscribe();
   }, [dispatch]);
 

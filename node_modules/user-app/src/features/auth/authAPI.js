@@ -2,7 +2,7 @@ import { supabase } from '../../services/supabase';
 
 export const signInWithGoogle = () => supabase.auth.signInWithOAuth({
 	provider: 'google',
-	options: { redirectTo: `${window.location.origin}/dashboard` },
+	options: { redirectTo: `${window.location.origin}/login` },
 });
 
 export const signInWithPhone = (phone) => supabase.auth.signInWithOtp({ phone });
