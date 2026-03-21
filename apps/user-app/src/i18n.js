@@ -61,6 +61,15 @@ const resources = {
           description: "Daily waste management tips.",
         },
       },
+      wasteTips: {
+        title: "Waste Tips & News",
+        subtitle: "From your Gram Panchayat",
+        pinned: "Pinned",
+        readMore: "Read more",
+        showLess: "Show less",
+        empty: "No tips posted yet",
+        emptySubtitle: "Check back later for updates from your Panchayat"
+      },
       chatbot: "Open Waste Chatbot",
       aiScannerPage: {
         title: "AI Waste Scanner",
@@ -178,6 +187,15 @@ const resources = {
           description: "रोज़ाना कचरा प्रबंधन सुझाव।",
         },
       },
+      wasteTips: {
+        title: "कचरा टिप्स और समाचार",
+        subtitle: "आपकी ग्राम पंचायत से",
+        pinned: "पिन किया हुआ",
+        readMore: "और पढ़ें",
+        showLess: "कम दिखाएं",
+        empty: "अभी कोई सूचना नहीं है",
+        emptySubtitle: "अपनी पंचायत से अपडेट के लिए बाद में फिर देखें"
+      },
       chatbot: "वेस्ट चैटबॉट खोलें",
       aiScannerPage: {
         title: "एआई वेस्ट स्कैनर",
@@ -294,6 +312,15 @@ const resources = {
           title: "कचरा जनजागृती / टिप्स",
           description: "दररोजचे कचरा व्यवस्थापन टिप्स.",
         },
+      },
+      wasteTips: {
+        title: "कचरा टिप्स आणि बातम्या",
+        subtitle: "तुमच्या ग्रामपंचायतीकडून",
+        pinned: "पिन केलेले",
+        readMore: "आणखी वाचा",
+        showLess: "कमी दाखवा",
+        empty: "अजून कोणत्याही टिप्स नाहीत",
+        emptySubtitle: "तुमच्या पंचायतच्या अपडेटसाठी नंतर पुन्हा पाहा"
       },
       chatbot: "वेस्ट चॅटबॉट उघडा",
       aiScannerPage: {
