@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import BottomNav from '../components/BottomNav';
 import TaskCard from '../components/TaskCard';
 
-// Mock data for Phase 1 MVP
+// Mock data for Phase 1 & 2 MVP
 const mockTasks = [
   {
     id: 't1',
@@ -55,9 +55,9 @@ const mockTasks = [
 const TaskDashboard = () => {
   const { t, i18n } = useTranslation();
   const [lang, setLang] = useState('en');
-  
+
   const toggleLang = () => {
-    const nextLang = lang === 'en' ? 'hi' : lang === 'hi' ? 'mr' : 'en';
+    const nextLang = lang === 'en' ? 'hi' : lang === 'hi' ? 'mr' : 'en';        
     setLang(nextLang);
     i18n.changeLanguage(nextLang);
   };
@@ -67,13 +67,13 @@ const TaskDashboard = () => {
 
   return (
     <div className="bg-[var(--sm-bg)] min-h-screen">
-      <Navbar 
-        workerName="Ramesh Kumar" 
-        area="South Village Sector" 
-        onLanguageToggle={toggleLang} 
-        lang={lang} 
+      <Navbar
+        workerName="Ramesh Kumar"
+        area="South Village Sector"
+        onLanguageToggle={toggleLang}
+        lang={lang}
       />
-      
+
       <div className="sm-page">
         {/* Simple Performance View */}
         <div className="bg-white rounded-lg p-4 shadow-sm mb-6 flex justify-between items-center border border-gray-100">
@@ -89,16 +89,30 @@ const TaskDashboard = () => {
           </div>
         </div>
 
-        {/* Notifications (Mock Phase 1) */}
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6 flex items-start gap-3">
-          <div className="mt-0.5 text-orange-600">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+        {/* Notifications (Phase 2 Enhanced Alerts) */}
+        <div className="flex flex-col gap-2 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3 shadow-sm animate-pulse">
+            <div className="mt-0.5 text-red-600">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-[13px] font-bold text-red-800">Critical Alert</div>
+              <div className="text-[12px] text-red-700 font-medium">Market Line 2 bin is overdue by 10 mins!</div>
+            </div>
           </div>
-          <div>
-            <div className="text-[13px] font-semibold text-orange-800">{t('slaAlert')}</div>
-            <div className="text-[12px] text-orange-700">Market Line 2 bin is overdue!</div>
+          
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-3 shadow-sm">
+            <div className="mt-0.5 text-orange-600">
+               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-[13px] font-bold text-orange-800">SLA Warning</div>
+              <div className="text-[12px] text-orange-700">Main Square Bin SLA breaches in 15 mins.</div>
+            </div>
           </div>
         </div>
 
@@ -108,7 +122,7 @@ const TaskDashboard = () => {
         </div>
 
         {/* Task List */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 pb-20">
           {mockTasks.map(task => (
             <TaskCard key={task.id} task={task} />
           ))}
