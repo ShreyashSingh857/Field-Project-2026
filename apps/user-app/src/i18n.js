@@ -6,6 +6,23 @@ const resources = {
     translation: {
       appName: "GramWaste Connect",
       appSubtitle: "Smart Waste Dashboard",
+      login: {
+        title: "Welcome",
+        subtitle: "Smart Waste Management",
+        googleBtn: "Continue with Google",
+        orDivider: "or",
+        phonePlaceholder: "Enter your mobile number",
+        sendOtpBtn: "Send OTP",
+        otpLabel: "Enter OTP",
+        otpPlaceholder: "6-digit OTP",
+        verifyBtn: "Verify",
+        resendOtp: "Resend OTP",
+        error: {
+          invalidPhone: "Please enter a valid 10-digit phone number.",
+          invalidOtp: "Please enter a valid 6-digit OTP.",
+          generic: "Something went wrong. Please try again.",
+        },
+      },
       menu: {
         profile: "Profile",
         settings: "Settings",
@@ -99,6 +116,23 @@ const resources = {
     translation: {
       appName: "ग्रामवेस्ट कनेक्ट",
       appSubtitle: "स्मार्ट वेस्ट डैशबोर्ड",
+      login: {
+        title: "स्वागत है",
+        subtitle: "स्मार्ट वेस्ट मैनेजमेंट",
+        googleBtn: "Google से जारी रखें",
+        orDivider: "या",
+        phonePlaceholder: "अपना मोबाइल नंबर दर्ज करें",
+        sendOtpBtn: "OTP भेजें",
+        otpLabel: "OTP दर्ज करें",
+        otpPlaceholder: "6 अंकों का OTP",
+        verifyBtn: "सत्यापित करें",
+        resendOtp: "OTP दोबारा भेजें",
+        error: {
+          invalidPhone: "कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।",
+          invalidOtp: "कृपया सही 6 अंकों का OTP दर्ज करें।",
+          generic: "कुछ गलत हो गया। कृपया फिर से प्रयास करें।",
+        },
+      },
       menu: {
         profile: "प्रोफाइल",
         settings: "सेटिंग्स",
@@ -192,6 +226,23 @@ const resources = {
     translation: {
       appName: "ग्रामवेस्ट कनेक्ट",
       appSubtitle: "स्मार्ट वेस्ट डॅशबोर्ड",
+      login: {
+        title: "स्वागत आहे",
+        subtitle: "स्मार्ट वेस्ट मॅनेजमेंट",
+        googleBtn: "Google सह पुढे जा",
+        orDivider: "किंवा",
+        phonePlaceholder: "तुमचा मोबाईल नंबर टाका",
+        sendOtpBtn: "OTP पाठवा",
+        otpLabel: "OTP टाका",
+        otpPlaceholder: "6 अंकी OTP",
+        verifyBtn: "तपासा",
+        resendOtp: "OTP पुन्हा पाठवा",
+        error: {
+          invalidPhone: "कृपया योग्य 10 अंकी मोबाईल नंबर टाका.",
+          invalidOtp: "कृपया योग्य 6 अंकी OTP टाका.",
+          generic: "काहीतरी चूक झाली. कृपया पुन्हा प्रयत्न करा.",
+        },
+      },
       menu: {
         profile: "प्रोफाइल",
         settings: "सेटिंग्ज",

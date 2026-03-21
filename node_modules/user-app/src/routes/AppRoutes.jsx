@@ -3,13 +3,14 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import AIScannerPage from '../pages/AIScannerPage';
 import Dashboard from '../pages/Dashboard';
 import LandingPage from '../pages/LandingPage';
+import Login from '../pages/Login';
 import MarketplacePage from '../pages/MarketplacePage';
 
 export default function AppRoutes() {
 	return (
 		<Routes>
 			<Route path="/" element={<LandingPage />} />
-			<Route path="/login" element={<LandingPage />} />
+			<Route path="/login" element={<Login />} />
 			<Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 			<Route path="/ai-scanner" element={<ProtectedRoute><AIScannerPage /></ProtectedRoute>} />
 			<Route path="/marketplace" element={<ProtectedRoute><MarketplacePage /></ProtectedRoute>} />
