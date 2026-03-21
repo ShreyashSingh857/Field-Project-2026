@@ -6,6 +6,30 @@ const resources = {
     translation: {
       appName: "GramWaste Connect",
       appSubtitle: "Smart Waste Dashboard",
+      login: {
+        title: "Welcome",
+        subtitle: "Smart Waste Management",
+        googleBtn: "Continue with Google",
+        orDivider: "or",
+        phonePlaceholder: "Enter your mobile number",
+        sendOtpBtn: "Send OTP",
+        otpLabel: "Enter OTP",
+        otpPlaceholder: "6-digit OTP",
+        verifyBtn: "Verify",
+        resendOtp: "Resend OTP",
+        error: {
+          invalidPhone: "Please enter a valid 10-digit phone number.",
+          invalidOtp: "Please enter a valid 6-digit OTP.",
+          generic: "Something went wrong. Please try again.",
+        },
+      },
+      binsMap: {
+        title: "Nearby Bins",
+        subtitle: "Tap a bin for details",
+        empty: "No bins found in your area",
+        viewDetails: "View Details",
+        fillLevel: "Fill Level",
+      },
       menu: {
         profile: "Profile",
         settings: "Settings",
@@ -37,7 +61,31 @@ const resources = {
           description: "Daily waste management tips.",
         },
       },
-      chatbot: "Open Waste Chatbot",
+      wasteTips: {
+        title: "Waste Tips & News",
+        subtitle: "From your Gram Panchayat",
+        pinned: "Pinned",
+        readMore: "Read more",
+        showLess: "Show less",
+        empty: "No tips posted yet",
+        emptySubtitle: "Check back later for updates from your Panchayat"
+      },
+      profile: {
+        title: "My Profile",
+        language: "Language",
+        myListings: "My Listings",
+        myReports: "My Reports",
+        logout: "Logout",
+        editName: "Edit name",
+        saveName: "Save"
+      },
+      chatbot: {
+        title: "Waste Assistant",
+        placeholder: "Ask about waste management...",
+        welcome: "Hi! I'm your Waste Assistant. Ask me anything about waste disposal, recycling, or sanitation.",
+        send: "Send"
+      },
+      chatbotOpen: "Open Waste Chatbot",
       aiScannerPage: {
         title: "AI Waste Scanner",
         subtitle: "Identify waste & dispose it right",
@@ -99,6 +147,30 @@ const resources = {
     translation: {
       appName: "ग्रामवेस्ट कनेक्ट",
       appSubtitle: "स्मार्ट वेस्ट डैशबोर्ड",
+      login: {
+        title: "स्वागत है",
+        subtitle: "स्मार्ट वेस्ट मैनेजमेंट",
+        googleBtn: "Google से जारी रखें",
+        orDivider: "या",
+        phonePlaceholder: "अपना मोबाइल नंबर दर्ज करें",
+        sendOtpBtn: "OTP भेजें",
+        otpLabel: "OTP दर्ज करें",
+        otpPlaceholder: "6 अंकों का OTP",
+        verifyBtn: "सत्यापित करें",
+        resendOtp: "OTP दोबारा भेजें",
+        error: {
+          invalidPhone: "कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।",
+          invalidOtp: "कृपया सही 6 अंकों का OTP दर्ज करें।",
+          generic: "कुछ गलत हो गया। कृपया फिर से प्रयास करें।",
+        },
+      },
+      binsMap: {
+        title: "नज़दीकी बिन",
+        subtitle: "विवरण देखने के लिए बिन चुनें",
+        empty: "आपके क्षेत्र में कोई बिन नहीं मिला",
+        viewDetails: "विवरण देखें",
+        fillLevel: "भराव स्तर",
+      },
       menu: {
         profile: "प्रोफाइल",
         settings: "सेटिंग्स",
@@ -130,7 +202,31 @@ const resources = {
           description: "रोज़ाना कचरा प्रबंधन सुझाव।",
         },
       },
-      chatbot: "वेस्ट चैटबॉट खोलें",
+      wasteTips: {
+        title: "कचरा टिप्स और समाचार",
+        subtitle: "आपकी ग्राम पंचायत से",
+        pinned: "पिन किया हुआ",
+        readMore: "और पढ़ें",
+        showLess: "कम दिखाएं",
+        empty: "अभी कोई सूचना नहीं है",
+        emptySubtitle: "अपनी पंचायत से अपडेट के लिए बाद में फिर देखें"
+      },
+      profile: {
+        title: "मेरा प्रोफाइल",
+        language: "भाषा",
+        myListings: "मेरी लिस्टिंग",
+        myReports: "मेरी रिपोर्ट",
+        logout: "लॉगआउट",
+        editName: "नाम बदलें",
+        saveName: "सहेजें"
+      },
+      chatbot: {
+        title: "वेस्ट सहायक",
+        placeholder: "कचरा प्रबंधन के बारे में पूछें...",
+        welcome: "नमस्ते! मैं आपका वेस्ट सहायक हूँ। कचरा निपटान, रीसाइक्लिंग या स्वच्छता के बारे में पूछें।",
+        send: "भेजें"
+      },
+      chatbotOpen: "वेस्ट चैटबॉट खोलें",
       aiScannerPage: {
         title: "एआई वेस्ट स्कैनर",
         subtitle: "कचरा पहचानें और सही तरीके से निपटाएं",
@@ -192,6 +288,30 @@ const resources = {
     translation: {
       appName: "ग्रामवेस्ट कनेक्ट",
       appSubtitle: "स्मार्ट वेस्ट डॅशबोर्ड",
+      login: {
+        title: "स्वागत आहे",
+        subtitle: "स्मार्ट वेस्ट मॅनेजमेंट",
+        googleBtn: "Google सह पुढे जा",
+        orDivider: "किंवा",
+        phonePlaceholder: "तुमचा मोबाईल नंबर टाका",
+        sendOtpBtn: "OTP पाठवा",
+        otpLabel: "OTP टाका",
+        otpPlaceholder: "6 अंकी OTP",
+        verifyBtn: "तपासा",
+        resendOtp: "OTP पुन्हा पाठवा",
+        error: {
+          invalidPhone: "कृपया योग्य 10 अंकी मोबाईल नंबर टाका.",
+          invalidOtp: "कृपया योग्य 6 अंकी OTP टाका.",
+          generic: "काहीतरी चूक झाली. कृपया पुन्हा प्रयत्न करा.",
+        },
+      },
+      binsMap: {
+        title: "जवळचे बिन",
+        subtitle: "तपशील पाहण्यासाठी बिन निवडा",
+        empty: "तुमच्या भागात कोणतेही बिन आढळले नाहीत",
+        viewDetails: "तपशील पहा",
+        fillLevel: "भराव पातळी",
+      },
       menu: {
         profile: "प्रोफाइल",
         settings: "सेटिंग्ज",
@@ -223,7 +343,31 @@ const resources = {
           description: "दररोजचे कचरा व्यवस्थापन टिप्स.",
         },
       },
-      chatbot: "वेस्ट चॅटबॉट उघडा",
+      wasteTips: {
+        title: "कचरा टिप्स आणि बातम्या",
+        subtitle: "तुमच्या ग्रामपंचायतीकडून",
+        pinned: "पिन केलेले",
+        readMore: "आणखी वाचा",
+        showLess: "कमी दाखवा",
+        empty: "अजून कोणत्याही टिप्स नाहीत",
+        emptySubtitle: "तुमच्या पंचायतच्या अपडेटसाठी नंतर पुन्हा पाहा"
+      },
+      profile: {
+        title: "माझे प्रोफाइल",
+        language: "भाषा",
+        myListings: "माझ्या नोंदी",
+        myReports: "माझे अहवाल",
+        logout: "लॉगआउट",
+        editName: "नाव बदला",
+        saveName: "जतन करा"
+      },
+      chatbot: {
+        title: "वेस्ट सहाय्यक",
+        placeholder: "कचरा व्यवस्थापनाबद्दल विचारा...",
+        welcome: "नमस्कार! मी तुमचा वेस्ट सहाय्यक आहे. कचरा विल्हेवाट, पुनर्वापर किंवा स्वच्छतेबद्दल विचारा.",
+        send: "पाठवा"
+      },
+      chatbotOpen: "वेस्ट चॅटबॉट उघडा",
       aiScannerPage: {
         title: "एआय वेस्ट स्कॅनर",
         subtitle: "कचरा ओळखा आणि योग्य प्रकारे विल्हेवाट लावा",

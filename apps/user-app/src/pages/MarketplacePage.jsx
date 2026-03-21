@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -11,6 +12,7 @@ import {
     X,
     Package,
 } from "lucide-react";
+import { addListing, fetchListings } from "../features/marketplace/marketplaceSlice";
 
 /* ─── Mock product data ──────────────────────────────────── */
 const MOCK_PRODUCTS = [
@@ -311,20 +313,46 @@ function EmptyState({ t, onAdd }) {
 
 /* ─── Main Page ──────────────────────────────────────────── */
 export default function MarketplacePage() {
+    const dispatch = useDispatch();
     const navigate = useNavigate();
     const { t } = useTranslation();
+    const { listings, loading } = useSelector((s) => s.marketplace);
+    const user = useSelector((s) => s.auth.user);
+    const villageId = user?.user_metadata?.village_id || user?.village_id;
 
     const [search, setSearch] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [showAddSheet, setShowAddSheet] = useState(false);
     const [filterRotated, setFilterRotated] = useState(false);
-    const [products, setProducts] = useState(MOCK_PRODUCTS);
+    useEffect(() => {
+        dispatch(fetchListings(villageId));
+    }, [dispatch, villageId]);
 
-    const handleAddItem = newItem => {
-        setProducts(prev => [
-            { ...newItem, id: Date.now(), distance: "~0m", ward: newItem.location || "Ward ?" },
-            ...prev,
-        ]);
+    const mapListingToProduct = (item) => ({
+        id: item.id,
+        name: item.title || item.name || 'Item',
+        price: item.price || 0,
+        distance: item.distance || '',
+        ward: item.village?.name || item.ward || '-',
+        category: item.category || 'other',
+        status: item.status || 'available',
+        emoji: item.emoji || '📦',
+        color: item.color || '#C8E6C9',
+    });
+
+    const products = useMemo(() => {
+        if (!listings?.length) return MOCK_PRODUCTS;
+        return listings.map(mapListingToProduct);
+    }, [listings]);
+
+    const handleAddItem = async (newItem) => {
+        await dispatch(addListing({
+            name: newItem.name,
+            description: newItem.description,
+            price: newItem.price,
+            contact: user?.phone || user?.user_metadata?.phone || '',
+        }));
+        dispatch(fetchListings(villageId));
     };
 
     const filtered = useMemo(() => {
@@ -444,7 +472,11 @@ export default function MarketplacePage() {
                     </div>
 
                     {/* ── Product Grid ── */}
-                    {filtered.length === 0 ? (
+                    {(loading && filtered.length === 0) ? (
+                        <div className="py-12 text-center text-sm" style={{ color: 'var(--clay-muted)' }}>
+                            {t('common.loading', { defaultValue: 'Loading...' })}
+                        </div>
+                    ) : filtered.length === 0 ? (
                         <EmptyState t={t} onAdd={() => setShowAddSheet(true)} />
                     ) : (
                         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
