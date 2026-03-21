@@ -7,6 +7,7 @@ import Dashboard from '../pages/Dashboard';
 import LandingPage from '../pages/LandingPage';
 import Login from '../pages/Login';
 import MarketplacePage from '../pages/MarketplacePage';
+import ReportIssuePage from '../pages/ReportIssuePage';
 import WasteTipsPage from '../pages/WasteTipsPage';
 
 export default function AppRoutes() {
@@ -19,6 +20,7 @@ export default function AppRoutes() {
 			<Route path="/bins/:id" element={<ProtectedRoute><BinDetails /></ProtectedRoute>} />
 			<Route path="/ai-scanner" element={<ProtectedRoute><AIScannerPage /></ProtectedRoute>} />
 			<Route path="/marketplace" element={<ProtectedRoute><MarketplacePage /></ProtectedRoute>} />
+			<Route path="/report" element={<ProtectedRoute><ReportIssuePage /></ProtectedRoute>} />
 			<Route path="/tips" element={<ProtectedRoute><WasteTipsPage /></ProtectedRoute>} />
 			<Route path="*" element={<Navigate to="/" replace />} />
 		</Routes>
