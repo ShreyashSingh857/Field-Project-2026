@@ -23,6 +23,13 @@ const resources = {
           generic: "Something went wrong. Please try again.",
         },
       },
+      binsMap: {
+        title: "Nearby Bins",
+        subtitle: "Tap a bin for details",
+        empty: "No bins found in your area",
+        viewDetails: "View Details",
+        fillLevel: "Fill Level",
+      },
       menu: {
         profile: "Profile",
         settings: "Settings",
@@ -133,6 +140,13 @@ const resources = {
           generic: "कुछ गलत हो गया। कृपया फिर से प्रयास करें।",
         },
       },
+      binsMap: {
+        title: "नज़दीकी बिन",
+        subtitle: "विवरण देखने के लिए बिन चुनें",
+        empty: "आपके क्षेत्र में कोई बिन नहीं मिला",
+        viewDetails: "विवरण देखें",
+        fillLevel: "भराव स्तर",
+      },
       menu: {
         profile: "प्रोफाइल",
         settings: "सेटिंग्स",
@@ -242,6 +256,13 @@ const resources = {
           invalidOtp: "कृपया योग्य 6 अंकी OTP टाका.",
           generic: "काहीतरी चूक झाली. कृपया पुन्हा प्रयत्न करा.",
         },
+      },
+      binsMap: {
+        title: "जवळचे बिन",
+        subtitle: "तपशील पाहण्यासाठी बिन निवडा",
+        empty: "तुमच्या भागात कोणतेही बिन आढळले नाहीत",
+        viewDetails: "तपशील पहा",
+        fillLevel: "भराव पातळी",
       },
       menu: {
         profile: "प्रोफाइल",
