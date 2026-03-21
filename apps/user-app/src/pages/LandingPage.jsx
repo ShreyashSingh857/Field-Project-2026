@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowDown } from "lucide-react";
 import { Globe3D } from "@/components/ui/3d-globe";
 import ParallaxBackground from "../components/ParallaxBackground";
@@ -82,6 +83,7 @@ function accentClass(accent) {
 }
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const scrollProgress = useScrollProgress();
 
   const activeSection = useMemo(() => getActiveSection(scrollProgress), [scrollProgress]);
@@ -189,10 +191,10 @@ export default function LandingPage() {
 
                 {section.cta && (
                   <div className="flex flex-wrap gap-3 pt-2">
-                    <button className="rounded-md bg-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_14px_rgba(22,163,74,0.35)] transition hover:bg-green-500">
+                    <button onClick={() => navigate('/login')} className="rounded-md bg-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_14px_rgba(22,163,74,0.35)] transition hover:bg-green-500">
                       Explore System
                     </button>
-                    <button className="rounded-md border border-slate-500 px-5 py-2.5 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-300">
+                    <button onClick={() => navigate('/login')} className="rounded-md border border-slate-500 px-5 py-2.5 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-300">
                       View Live Map
                     </button>
                   </div>
@@ -201,7 +203,7 @@ export default function LandingPage() {
                 {section.final && (
                   <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
                     <h3 className="text-3xl font-semibold text-white">Cleaner Villages. Smarter Systems.</h3>
-                    <button className="mt-4 rounded-md bg-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_14px_rgba(22,163,74,0.35)] transition hover:bg-green-500">
+                    <button onClick={() => navigate('/login')} className="mt-4 rounded-md bg-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_14px_rgba(22,163,74,0.35)] transition hover:bg-green-500">
                       Get Started
                     </button>
                   </div>
