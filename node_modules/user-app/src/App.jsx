@@ -1,21 +1,27 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import LandingPage from './pages/LandingPage.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import AIScannerPage from './pages/AIScannerPage.jsx'
-import MarketplacePage from './pages/MarketplacePage.jsx'
-import './App.css'
+import { useEffect } from 'react';
+import { BrowserRouter as Router } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { initAuth, setUser } from './features/auth/authSlice';
+import { supabase } from './services/supabase';
+import AppRoutes from './routes/AppRoutes';
+import './App.css';
 
 function App() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(initAuth());
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      dispatch(setUser(session?.user ?? null));
+    });
+    return () => subscription.unsubscribe();
+  }, [dispatch]);
+
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/landing-page" element={<LandingPage />} />
-        <Route path="/ai-scanner" element={<AIScannerPage />} />
-        <Route path="/marketplace" element={<MarketplacePage />} />
-      </Routes>
+      <AppRoutes />
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;
