@@ -70,6 +70,15 @@ const resources = {
         empty: "No tips posted yet",
         emptySubtitle: "Check back later for updates from your Panchayat"
       },
+      profile: {
+        title: "My Profile",
+        language: "Language",
+        myListings: "My Listings",
+        myReports: "My Reports",
+        logout: "Logout",
+        editName: "Edit name",
+        saveName: "Save"
+      },
       chatbot: "Open Waste Chatbot",
       aiScannerPage: {
         title: "AI Waste Scanner",
@@ -196,6 +205,15 @@ const resources = {
         empty: "अभी कोई सूचना नहीं है",
         emptySubtitle: "अपनी पंचायत से अपडेट के लिए बाद में फिर देखें"
       },
+      profile: {
+        title: "मेरा प्रोफाइल",
+        language: "भाषा",
+        myListings: "मेरी लिस्टिंग",
+        myReports: "मेरी रिपोर्ट",
+        logout: "लॉगआउट",
+        editName: "नाम बदलें",
+        saveName: "सहेजें"
+      },
       chatbot: "वेस्ट चैटबॉट खोलें",
       aiScannerPage: {
         title: "एआई वेस्ट स्कैनर",
@@ -321,6 +339,15 @@ const resources = {
         showLess: "कमी दाखवा",
         empty: "अजून कोणत्याही टिप्स नाहीत",
         emptySubtitle: "तुमच्या पंचायतच्या अपडेटसाठी नंतर पुन्हा पाहा"
+      },
+      profile: {
+        title: "माझे प्रोफाइल",
+        language: "भाषा",
+        myListings: "माझ्या नोंदी",
+        myReports: "माझे अहवाल",
+        logout: "लॉगआउट",
+        editName: "नाव बदला",
+        saveName: "जतन करा"
       },
       chatbot: "वेस्ट चॅटबॉट उघडा",
       aiScannerPage: {
