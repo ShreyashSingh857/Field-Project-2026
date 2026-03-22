@@ -3,9 +3,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import TaskDashboard from '../pages/TaskDashboard';
 import TaskDetails from '../pages/TaskDetails';
 import MapView from '../pages/MapView';
+import Profile from '../pages/Profile';
 
-// Placeholder mock pages for routes not yet implemented in Phase 1
-const Profile = () => <div className="p-4">Profile View (Phase 2)</div>;
+// Placeholder mock pages for routes not yet implemented
 const Login = () => <div className="p-4">Login Page (Pending Auth)</div>;
 
 const AppRoutes = () => {

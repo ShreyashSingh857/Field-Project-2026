@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import BottomNav from '../components/BottomNav';
 import TaskCard from '../components/TaskCard';
 
-// Mock data for Phase 1 & 2 MVP
+// Mock data for Phase 1, 2, & 3 MVP
 const mockTasks = [
   {
     id: 't1',
@@ -16,6 +16,8 @@ const mockTasks = [
     distance: '200m',
     status: 'pending',
     overdue: false,
+    smartPick: true,
+    smartReason: 'Critical Fill in High Density Area'
   },
   {
     id: 't2',
@@ -27,6 +29,7 @@ const mockTasks = [
     distance: '450m',
     status: 'pending',
     overdue: true,
+    smartPick: false,
   },
   {
     id: 't3',

@@ -41,10 +41,23 @@ const Navbar = ({ workerName, area, onLanguageToggle, lang }) => {
           <div className="text-[12px] opacity-90">{area}</div>
         </div>
       </div>
-      <div>
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={() => {
+            if(window.confirm('🚨 Trigger SOS Emergency Alert? This will immediately notify your supervisor.')) {
+              alert('SOS Sent! Supervisor is being notified.');
+            }
+          }}
+          className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-sm flex items-center justify-center border-2 border-red-400"
+          title="SOS / Emergency"
+        >
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </button>
         <button 
           onClick={onLanguageToggle}
-          className="bg-white/20 px-3 py-1 rounded text-sm font-medium border border-white/40"
+          className="bg-white/20 px-3 py-1.5 rounded text-sm font-bold border border-white/40"
         >
           {lang.toUpperCase()}
         </button>

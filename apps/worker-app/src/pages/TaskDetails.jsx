@@ -194,41 +194,58 @@ const TaskDetails = () => {
           </button>
         </div>
 
-        {/* Voice Note Section */}
-        <div className="mb-4 bg-[#F8F9FA] border border-gray-200 p-4 rounded-xl">
+        {/* Voice & Issue Report Section */}
+        <div className="mb-4 bg-red-50 border border-red-100 p-4 rounded-xl">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-[14px] font-bold text-[var(--sm-text)]">Report Issue</h3>
-            <span className="text-[11px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">Voice Support</span>
+            <h3 className="text-[14px] font-bold text-red-800">Report Issue</h3>
+            <span className="text-[11px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold">Priority Escalation</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <label className="flex items-center gap-2 p-2 bg-white rounded border border-red-100 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 text-red-600 rounded focus:ring-red-500" />
+              <span className="text-[12px] font-medium text-gray-700">Damaged Bin</span>
+            </label>
+            <label className="flex items-center gap-2 p-2 bg-white rounded border border-red-100 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 text-red-600 rounded focus:ring-red-500" />
+              <span className="text-[12px] font-medium text-gray-700">Sensor Fault</span>
+            </label>
+            <button className="col-span-2 flex items-center justify-center gap-2 py-2 bg-white border border-gray-300 rounded text-gray-700 font-medium text-[13px] active:bg-gray-50">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              </svg>
+              Attach Photo of Damage
+            </button>
           </div>
           
           <button 
             onClick={toggleRecording}
             className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors ${
-              isRecording ? 'bg-red-100 text-red-600 border border-red-300' : 'bg-white border border-gray-300 text-gray-700'
+              isRecording ? 'bg-red-600 text-white shadow-md' : 'bg-white border border-red-200 text-red-700'
             }`}
           >
             {isRecording ? (
               <>
-                <span className="animate-pulse h-3 w-3 bg-red-600 rounded-full inline-block"></span>
-                Recording Issue... Tap to stop
+                <span className="animate-pulse h-3 w-3 bg-white rounded-full inline-block"></span>
+                Recording... Tap to Stop
               </>
             ) : (
               <>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-                Hold to speak issue
+                Hold to Add Voice Note
               </>
             )}
           </button>
 
           {voiceNote && (
-            <div className="mt-3 bg-white p-3 border border-gray-200 rounded-lg flex items-start gap-2">
-              <svg width="18" height="18" className="text-[var(--sm-primary)] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mt-3 bg-white p-3 border border-red-100 rounded-lg flex items-start gap-2">
+              <svg width="18" height="18" className="text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
               <div>
-                <p className="text-[12px] italic text-gray-600">"{voiceNote}"</p>
+                <p className="text-[12px] italic text-gray-700">"{voiceNote}"</p>
                 <div className="text-[10px] text-gray-400 mt-1">Transcribed automatically</div>
               </div>
             </div>

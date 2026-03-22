@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import Navbar from '../components/Navbar';
 import BottomNav from '../components/BottomNav';
@@ -74,15 +74,19 @@ const MapView = () => {
             </svg>
             Optimized Route Active
           </h3>
-          <p className="text-[12px] text-[var(--sm-text-muted)] mt-1">Suggested path: Market -> Square -> School</p>
+          <p className="text-[12px] text-[var(--sm-text-muted)] mt-1">Suggested path: Market &rarr; Square &rarr; School</p>
         </div>
 
-        <MapContainer center={[19.0750, 72.8770]} zoom={15} style={{ height: '100%', width: '100%', zIndex: 1 }}>
+        <MapContainer center={[19.0750, 72.8770]} zoom={15} style={{ height: 'calc(100vh - 130px)', width: '100%', zIndex: 1 }}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
           
+          {/* Heatmap mock layers for High-Density Waste Areas */}
+          <Circle center={[19.0760, 72.8780]} pathOptions={{ fillColor: 'red', color: 'transparent', fillOpacity: 0.2 }} radius={250} />
+          <Circle center={[19.0775, 72.8795]} pathOptions={{ fillColor: 'orange', color: 'transparent', fillOpacity: 0.2 }} radius={150} />
+
           <Marker position={workerCoords} icon={iconWorker}>
             <Popup>You are here</Popup>
           </Marker>
