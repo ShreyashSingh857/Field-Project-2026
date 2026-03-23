@@ -3,7 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ClipboardList, Edit3, Languages, LogOut, MapPin, ShoppingBag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { logout } from '../features/auth/authSlice';
+import { logout, setUser } from '../features/auth/authSlice';
+import api from '../services/axiosInstance';
 
 export default function Profile() {
 	const { t, i18n } = useTranslation();
@@ -13,8 +14,26 @@ export default function Profile() {
 	const baseName = user?.user_metadata?.name || user?.user_metadata?.full_name || 'User';
 	const [name, setName] = useState(baseName);
 	const [editing, setEditing] = useState(false);
+	const [saving, setSaving] = useState(false);
 	const initials = useMemo(() => name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase(), [name]);
 	const langs = [{ k: 'en', l: 'English' }, { k: 'hi', l: 'हिंदी' }, { k: 'mr', l: 'मराठी' }];
+
+	const handleSaveName = async () => {
+		if (!name.trim()) return;
+		setSaving(true);
+		try {
+			await api.patch(`/users/${user.id}`, { name: name.trim() });
+			dispatch(setUser({
+				...user,
+				user_metadata: { ...user.user_metadata, name: name.trim() }
+			}));
+			setEditing(false);
+		} catch {
+			// Silently fail — name stays edited locally, will retry on next save
+		} finally {
+			setSaving(false);
+		}
+	};
 
 	return (
 		<div className="min-h-screen text-black" style={{ backgroundColor: 'var(--clay-bg)' }}>
@@ -27,7 +46,29 @@ export default function Profile() {
 				<main className="mx-auto max-w-md space-y-3 px-4 py-6 pb-24">
 					<section className="clay-card p-5 text-center">
 						<div className="mx-auto clay-icon mb-3 flex h-20 w-20 items-center justify-center" style={{ backgroundColor: 'var(--clay-card)' }}><span className="text-2xl font-bold" style={{ color: 'var(--clay-primary)' }}>{initials}</span></div>
-						{!editing ? <div className="inline-flex items-center gap-2"><p className="text-xl font-bold text-black">{name}</p><button onClick={() => setEditing(true)} className="clay-btn-round inline-flex h-7 w-7 items-center justify-center"><Edit3 className="h-3 w-3" /></button></div> : <div className="mx-auto flex max-w-xs items-center gap-2"><input className="clay-lang-box w-full px-3 py-2 text-sm text-black outline-none" value={name} onChange={(e) => setName(e.target.value)} /><button className="rounded-xl px-3 py-2 text-xs font-semibold text-white" style={{ background: 'linear-gradient(135deg, var(--clay-primary), var(--clay-secondary))' }} onClick={() => setEditing(false)}>{t('profile.saveName', { defaultValue: 'Save' })}</button></div>}
+						{!editing ? (
+							<div className="inline-flex items-center gap-2">
+								<p className="text-xl font-bold text-black">{name}</p>
+								<button onClick={() => setEditing(true)} className="clay-btn-round inline-flex h-7 w-7 items-center justify-center">
+									<Edit3 className="h-3 w-3" />
+								</button>
+							</div>
+						) : (
+							<div className="mx-auto flex max-w-xs items-center gap-2">
+								<input className="clay-lang-box w-full px-3 py-2 text-sm text-black outline-none" value={name} onChange={(e) => setName(e.target.value)} />
+								<button
+									onClick={handleSaveName}
+									disabled={saving}
+									className="rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+									style={{ background: 'linear-gradient(135deg, var(--clay-primary), var(--clay-secondary))' }}
+								>
+									{saving
+										? t('profile.saving', { defaultValue: 'Saving...' })
+										: t('profile.saveName', { defaultValue: 'Save' })
+									}
+								</button>
+							</div>
+						)}
 						<p className="mt-2 text-sm" style={{ color: 'var(--clay-muted)' }}>{user?.phone || user?.user_metadata?.phone || '-'}</p>
 						<p className="mt-1 inline-flex items-center gap-1 text-xs" style={{ color: 'var(--clay-muted)' }}><MapPin className="h-3 w-3" />{user?.user_metadata?.village_name || 'Village'}</p>
 					</section>
