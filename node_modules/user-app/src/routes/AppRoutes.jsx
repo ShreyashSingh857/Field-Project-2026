@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes} from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AIScannerPage from '../pages/AIScannerPage';
 import BinDetails from '../pages/BinDetails';

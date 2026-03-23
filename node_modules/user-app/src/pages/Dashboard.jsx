@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toggleChatbot } from "../features/chatbot/chatbotSlice";
+import { logout } from '../features/auth/authSlice';
 import Chatbot from "../components/Chatbot";
 
 const LOGO_SRC = "/Logo.png";
@@ -193,6 +194,7 @@ export default function Dashboard() {
 						<nav className="space-y-2">
 							<button
 								type="button"
+								onClick={() => { navigate('/profile'); setDrawerOpen(false); }}
 								className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 							>
 								<User className="h-4 w-4" />
@@ -200,6 +202,7 @@ export default function Dashboard() {
 							</button>
 							<button
 								type="button"
+								onClick={() => { setDrawerOpen(false); }}
 								className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 							>
 								<Settings className="h-4 w-4" />
@@ -207,11 +210,17 @@ export default function Dashboard() {
 							</button>
 							{menuItems.slice(2).map(item => {
 								const Icon = item.icon;
-
+								const handleClick = () => {
+									setDrawerOpen(false);
+									if (item.key === 'logout') {
+										dispatch(logout()).then(() => navigate('/'));
+									}
+								};
 								return (
 									<button
 										key={item.key}
 										type="button"
+										onClick={handleClick}
 										className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 									>
 										<Icon className="h-4 w-4" />
