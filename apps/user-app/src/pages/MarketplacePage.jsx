@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
     ArrowLeft,
@@ -315,6 +315,8 @@ function EmptyState({ t, onAdd }) {
 export default function MarketplacePage() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const mineOnly = searchParams.get('mine') === 'true';
     const { t } = useTranslation();
     const { listings, loading } = useSelector((s) => s.marketplace);
     const user = useSelector((s) => s.auth.user);
@@ -338,6 +340,8 @@ export default function MarketplacePage() {
         status: item.status || 'available',
         emoji: item.emoji || '📦',
         color: item.color || '#C8E6C9',
+        user_id: item.user_id,
+        seller_id: item.seller_id,
     });
 
     const products = useMemo(() => {
@@ -363,6 +367,10 @@ export default function MarketplacePage() {
         });
     }, [products, activeFilter, search]);
 
+    const visibleListings = mineOnly
+        ? filtered.filter(l => l.user_id === user?.id || l.seller_id === user?.id)
+        : filtered;
+
     return (
         <div className="min-h-screen text-black" style={{ backgroundColor: "var(--clay-bg)" }}>
             <div className="relative min-h-screen w-full" style={{ backgroundColor: "var(--clay-bg)" }}>
@@ -387,7 +395,7 @@ export default function MarketplacePage() {
                             </div>
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-black sm:text-base">
-                                    {t("marketplacePage.title")}
+                                    {mineOnly ? t('marketplace.myListings', { defaultValue: 'My Listings' }) : t("marketplacePage.title")}
                                 </p>
                                 <p className="truncate text-xs sm:text-sm" style={{ color: "var(--clay-muted)" }}>
                                     {t("marketplacePage.subtitle")}
@@ -472,15 +480,23 @@ export default function MarketplacePage() {
                     </div>
 
                     {/* ── Product Grid ── */}
-                    {(loading && filtered.length === 0) ? (
+                    {(loading && visibleListings.length === 0) ? (
                         <div className="py-12 text-center text-sm" style={{ color: 'var(--clay-muted)' }}>
                             {t('common.loading', { defaultValue: 'Loading...' })}
                         </div>
-                    ) : filtered.length === 0 ? (
-                        <EmptyState t={t} onAdd={() => setShowAddSheet(true)} />
+                    ) : visibleListings.length === 0 ? (
+                        mineOnly ? (
+                            <div className="flex flex-col items-center gap-4 py-12 text-center">
+                                <p className="text-base font-bold text-black">
+                                    {t('marketplace.noMyListings', { defaultValue: "You haven't posted any listings yet." })}
+                                </p>
+                            </div>
+                        ) : (
+                            <EmptyState t={t} onAdd={() => setShowAddSheet(true)} />
+                        )
                     ) : (
                         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-                            {filtered.map(product => (
+                            {visibleListings.map(product => (
                                 <ProductCard key={product.id} product={product} t={t} />
                             ))}
                         </div>
