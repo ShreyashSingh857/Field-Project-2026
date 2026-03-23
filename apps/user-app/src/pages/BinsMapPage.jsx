@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,14 @@ import Loader from '../components/Loader';
 const FALLBACK = [20.5937, 78.9629];
 const color = (v) => (v <= 60 ? '#2E7D32' : v <= 80 ? '#EF9F27' : '#E24B4A');
 const icon = (v) => L.divIcon({ className: '', html: `<div style="width:28px;height:28px;border-radius:50%;background:${color(v)};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+
+function ChangeView({ center, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
 
 export default function BinsMapPage() {
   const { t } = useTranslation();
@@ -46,6 +54,7 @@ export default function BinsMapPage() {
 
         <div className="relative h-[calc(100vh-76px)] w-full">
           <MapContainer center={center} zoom={zoom} style={{ height: '100%', width: '100%' }}>
+            <ChangeView center={center} zoom={zoom} />
             <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {mapped.map((b) => (
               <Marker key={b.id} position={[b.location_lat, b.location_lng]} icon={icon(b.fill_level || 0)}>
