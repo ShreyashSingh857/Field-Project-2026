@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes} from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedLayout from '../components/ProtectedLayout';
 import AIScannerPage from '../pages/AIScannerPage';
 import BinDetails from '../pages/BinDetails';
 import BinsMapPage from '../pages/BinsMapPage';
@@ -11,19 +12,30 @@ import Profile from '../pages/Profile';
 import ReportIssuePage from '../pages/ReportIssuePage';
 import WasteTipsPage from '../pages/WasteTipsPage';
 
+// Helper so every protected route gets the layout
+function Protected({ children }) {
+  return (
+    <ProtectedRoute>
+      <ProtectedLayout>
+        {children}
+      </ProtectedLayout>
+    </ProtectedRoute>
+  );
+}
+
 export default function AppRoutes() {
 	return (
 		<Routes>
 			<Route path="/" element={<LandingPage />} />
 			<Route path="/login" element={<Login />} />
-			<Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-			<Route path="/bins" element={<ProtectedRoute><BinsMapPage /></ProtectedRoute>} />
-			<Route path="/bins/:id" element={<ProtectedRoute><BinDetails /></ProtectedRoute>} />
-			<Route path="/ai-scanner" element={<ProtectedRoute><AIScannerPage /></ProtectedRoute>} />
-			<Route path="/marketplace" element={<ProtectedRoute><MarketplacePage /></ProtectedRoute>} />
-			<Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-			<Route path="/report" element={<ProtectedRoute><ReportIssuePage /></ProtectedRoute>} />
-			<Route path="/tips" element={<ProtectedRoute><WasteTipsPage /></ProtectedRoute>} />
+			<Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+			<Route path="/bins" element={<Protected><BinsMapPage /></Protected>} />
+			<Route path="/bins/:id" element={<Protected><BinDetails /></Protected>} />
+			<Route path="/ai-scanner" element={<Protected><AIScannerPage /></Protected>} />
+			<Route path="/marketplace" element={<Protected><MarketplacePage /></Protected>} />
+			<Route path="/profile" element={<Protected><Profile /></Protected>} />
+			<Route path="/report" element={<Protected><ReportIssuePage /></Protected>} />
+			<Route path="/tips" element={<Protected><WasteTipsPage /></Protected>} />
 			<Route path="*" element={<Navigate to="/" replace />} />
 		</Routes>
 	);
