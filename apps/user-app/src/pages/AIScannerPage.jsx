@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -41,7 +41,7 @@ const CATEGORIES = {
 };
 
 /* ─── Result Card ────────────────────────────────────────── */
-function ResultCard({ photo, result, onScanAnother, t }) {
+function ResultCard({ photo, result, onScanAnother, onMapClick, t }) {
     const cat = CATEGORIES[result.category] ?? CATEGORIES["General Waste"];
 
     return (
@@ -94,13 +94,14 @@ function ResultCard({ photo, result, onScanAnother, t }) {
                             <p className="text-[10px] font-medium" style={{ color: "var(--clay-muted)" }}>
                                 {label}
                             </p>
-                            <p className="truncate text-sm font-semibold text-black">{value}</p>
+                            <p className="text-sm font-semibold text-black whitespace-pre-wrap break-words">{value}</p>
                         </div>
                     </div>
                 ))}
 
                 {/* View on map */}
                 <button
+                    onClick={onMapClick}
                     className="clay-btn-wide mt-1 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white"
                     style={{
                         background: "linear-gradient(135deg, var(--clay-primary), var(--clay-secondary))",
@@ -139,6 +140,7 @@ export default function AIScannerPage() {
     const [photo, setPhoto] = useState(null);
     const [cameraStream, setCameraStream] = useState(null);
     const [showCamera, setShowCamera] = useState(false);
+    const [facingMode, setFacingMode] = useState("environment");
     const [error, setError] = useState(null);
     const result = useMemo(() => {
         if (!ai.result) return null;
@@ -150,12 +152,18 @@ export default function AIScannerPage() {
         };
     }, [ai.result]);
 
+    useEffect(() => {
+        if (videoRef.current && cameraStream) {
+            videoRef.current.srcObject = cameraStream;
+        }
+    }, [cameraStream, showCamera]);
+
     /* Attempt live camera; fallback to file input */
     const handleScanTap = useCallback(async () => {
         setError(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment" },
+                video: { facingMode },
             });
             setCameraStream(stream);
             setShowCamera(true);
@@ -163,7 +171,23 @@ export default function AIScannerPage() {
             // No camera (desktop/denied) — open file picker
             fileInputRef.current?.click();
         }
-    }, []);
+    }, [facingMode]);
+
+    const toggleCamera = useCallback(async () => {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(t => t.stop());
+        }
+        const newMode = facingMode === "environment" ? "user" : "environment";
+        setFacingMode(newMode);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: newMode },
+            });
+            setCameraStream(stream);
+        } catch (err) {
+            console.error(err);
+        }
+    }, [cameraStream, facingMode]);
 
     /* Capture frame from live video */
     const captureFromCamera = useCallback(async () => {
@@ -261,8 +285,8 @@ export default function AIScannerPage() {
                                     playsInline
                                     muted
                                     onLoadedMetadata={() => videoRef.current?.play()}
-                                    className="w-full rounded-[22px] bg-black"
-                                    style={{ maxHeight: "55vw" }}
+                                    className="w-full rounded-[22px] bg-black object-cover"
+                                    style={{ height: "60vh", maxHeight: "600px" }}
                                 />
                                 {/* Scan overlay frame */}
                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -295,6 +319,14 @@ export default function AIScannerPage() {
                                 >
                                     <Camera className="h-4 w-4" />
                                     Capture
+                                </button>
+                                <button
+                                    onClick={toggleCamera}
+                                    className="clay-btn-round flex items-center justify-center rounded-2xl p-3 text-sm font-medium text-black transition"
+                                    style={{ borderRadius: "16px", backgroundColor: "var(--clay-card)", boxShadow: "var(--clay-shadow)" }}
+                                    aria-label="Switch Camera"
+                                >
+                                    <RefreshCw className="h-5 w-5" />
                                 </button>
                             </div>
                         </div>
@@ -392,7 +424,7 @@ export default function AIScannerPage() {
 
                     {/* ── Result Card ── */}
                     {phase === "result" && result && (
-                        <ResultCard photo={photo} result={result} onScanAnother={reset} t={t} />
+                        <ResultCard photo={photo} result={result} onScanAnother={reset} onMapClick={() => navigate("/bins")} t={t} />
                     )}
                 </main>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
 	AlertTriangle,
@@ -17,8 +17,7 @@ import {
 	X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toggleChatbot } from "../features/chatbot/chatbotSlice";
-import Chatbot from "../components/Chatbot";
+import { logout } from '../features/auth/authSlice';
 
 const LOGO_SRC = "/Logo.png";
 
@@ -33,6 +32,10 @@ export default function Dashboard() {
 	const { t, i18n } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const navigate = useNavigate();
+
+	const user = useSelector((s) => s.auth.user);
+	const userName = user?.user_metadata?.name || user?.user_metadata?.full_name || '';
+	const villageName = user?.user_metadata?.village_name || '';
 
 	const cards = useMemo(
 		() => [
@@ -126,6 +129,18 @@ export default function Dashboard() {
 							</p>
 						</div>
 					</div>
+					{userName ? (
+						<div className="ml-auto text-right">
+							<p className="max-w-[100px] truncate text-xs font-semibold text-black sm:max-w-[140px]">
+								{userName}
+							</p>
+							{villageName ? (
+								<p className="truncate text-[10px]" style={{ color: "var(--clay-muted)" }}>
+									{villageName}
+								</p>
+							) : null}
+						</div>
+					) : null}
 				</header>
 
 				{/* ── Drawer overlay + sidebar ── */}
@@ -193,6 +208,7 @@ export default function Dashboard() {
 						<nav className="space-y-2">
 							<button
 								type="button"
+								onClick={() => { navigate('/profile'); setDrawerOpen(false); }}
 								className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 							>
 								<User className="h-4 w-4" />
@@ -200,6 +216,7 @@ export default function Dashboard() {
 							</button>
 							<button
 								type="button"
+								onClick={() => { setDrawerOpen(false); }}
 								className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 							>
 								<Settings className="h-4 w-4" />
@@ -207,11 +224,17 @@ export default function Dashboard() {
 							</button>
 							{menuItems.slice(2).map(item => {
 								const Icon = item.icon;
-
+								const handleClick = () => {
+									setDrawerOpen(false);
+									if (item.key === 'logout') {
+										dispatch(logout()).then(() => navigate('/'));
+									}
+								};
 								return (
 									<button
 										key={item.key}
 										type="button"
+										onClick={handleClick}
 										className="clay-nav-item flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm font-medium text-black"
 									>
 										<Icon className="h-4 w-4" />
@@ -227,10 +250,16 @@ export default function Dashboard() {
 				<main className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 pb-24 sm:px-5 sm:py-5 md:px-6 md:py-6 lg:px-8">
 					<div>
 						<h1 className="text-lg font-bold text-black sm:text-xl md:text-2xl">
-							{t("dashboardTitle")}
+							{userName
+								? `👋 ${t('dashboard.hello', { defaultValue: 'Hello' })}, ${userName}!`
+								: t("dashboardTitle")
+							}
 						</h1>
 						<p className="text-sm md:text-base" style={{ color: "var(--clay-muted)" }}>
-							{t("dashboardSubtitle")}
+							{villageName
+								? `${villageName} · ${t("dashboardSubtitle")}`
+								: t("dashboardSubtitle")
+							}
 						</p>
 					</div>
 
@@ -270,16 +299,6 @@ export default function Dashboard() {
 					</section>
 				</main>
 
-				{/* ── Floating Chatbot FAB ── */}
-				<button
-					type="button"
-					onClick={() => dispatch(toggleChatbot())}
-					className="clay-fab absolute bottom-4 right-4 inline-flex h-14 w-14 items-center justify-center text-green-50 sm:bottom-5 sm:right-5"
-					aria-label={t("chatbotOpen")}
-				>
-					<MessageCircle className="h-6 w-6" />
-				</button>
-				<Chatbot />
 			</div>
 		</div>
 	);

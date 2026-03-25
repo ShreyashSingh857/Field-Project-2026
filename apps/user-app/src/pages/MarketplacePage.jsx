@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
     ArrowLeft,
@@ -95,8 +95,16 @@ const STATUS_STYLES = {
 /* ─── Add Item Bottom Sheet ──────────────────────────────── */
 function AddItemSheet({ t, filters, onClose, onSubmit }) {
     const [form, setForm] = useState({
-        name: "", price: "", category: "furniture", description: "", location: "",
+        name: "", price: "", category: "furniture", description: "", location: "", photo: null,
     });
+    const [photoPreview, setPhotoPreview] = useState(null);
+
+    const handlePhotoChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setForm(f => ({ ...f, photo: file }));
+        setPhotoPreview(URL.createObjectURL(file));
+    };
 
     const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -111,6 +119,7 @@ function AddItemSheet({ t, filters, onClose, onSubmit }) {
             status: "available",
             emoji: "📦",
             color: "#C8E6C9",
+            photo: form.photo,
         });
         onClose();
     };
@@ -200,6 +209,46 @@ function AddItemSheet({ t, filters, onClose, onSubmit }) {
                                 className="w-full resize-none px-3 py-2.5 text-sm text-black outline-none"
                                 style={inputStyle}
                             />
+                        </div>
+
+                        {/* Photo */}
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-black">
+                                {t("marketplacePage.addForm.photo", { defaultValue: "Photo (optional)" })}
+                            </label>
+                            {!photoPreview ? (
+                                <label
+                                    className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-5 text-center"
+                                    style={{ borderColor: 'var(--clay-card-alt, #ddd)' }}
+                                >
+                                    <Package className="mb-1 h-6 w-6" style={{ color: 'var(--clay-muted)' }} />
+                                    <span className="text-xs" style={{ color: 'var(--clay-muted)' }}>
+                                        {t("marketplacePage.addForm.photoTap", { defaultValue: "Tap to add photo" })}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        className="hidden"
+                                        onChange={handlePhotoChange}
+                                    />
+                                </label>
+                            ) : (
+                                <div className="relative">
+                                    <img
+                                        src={photoPreview}
+                                        alt="listing"
+                                        className="aspect-video w-full rounded-xl object-cover"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPhotoPreview(null); setForm(f => ({ ...f, photo: null })); }}
+                                        className="absolute right-2 top-2 clay-btn-round inline-flex h-7 w-7 items-center justify-center"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Location */}
@@ -315,6 +364,8 @@ function EmptyState({ t, onAdd }) {
 export default function MarketplacePage() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const mineOnly = searchParams.get('mine') === 'true';
     const { t } = useTranslation();
     const { listings, loading } = useSelector((s) => s.marketplace);
     const user = useSelector((s) => s.auth.user);
@@ -338,6 +389,8 @@ export default function MarketplacePage() {
         status: item.status || 'available',
         emoji: item.emoji || '📦',
         color: item.color || '#C8E6C9',
+        user_id: item.user_id,
+        seller_id: item.seller_id,
     });
 
     const products = useMemo(() => {
@@ -351,6 +404,7 @@ export default function MarketplacePage() {
             description: newItem.description,
             price: newItem.price,
             contact: user?.phone || user?.user_metadata?.phone || '',
+            photo: newItem.photo || null,
         }));
         dispatch(fetchListings(villageId));
     };
@@ -362,6 +416,10 @@ export default function MarketplacePage() {
             return matchesFilter && matchesSearch;
         });
     }, [products, activeFilter, search]);
+
+    const visibleListings = mineOnly
+        ? filtered.filter(l => l.user_id === user?.id || l.seller_id === user?.id)
+        : filtered;
 
     return (
         <div className="min-h-screen text-black" style={{ backgroundColor: "var(--clay-bg)" }}>
@@ -387,7 +445,7 @@ export default function MarketplacePage() {
                             </div>
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-black sm:text-base">
-                                    {t("marketplacePage.title")}
+                                    {mineOnly ? t('marketplace.myListings', { defaultValue: 'My Listings' }) : t("marketplacePage.title")}
                                 </p>
                                 <p className="truncate text-xs sm:text-sm" style={{ color: "var(--clay-muted)" }}>
                                     {t("marketplacePage.subtitle")}
@@ -472,15 +530,23 @@ export default function MarketplacePage() {
                     </div>
 
                     {/* ── Product Grid ── */}
-                    {(loading && filtered.length === 0) ? (
+                    {(loading && visibleListings.length === 0) ? (
                         <div className="py-12 text-center text-sm" style={{ color: 'var(--clay-muted)' }}>
                             {t('common.loading', { defaultValue: 'Loading...' })}
                         </div>
-                    ) : filtered.length === 0 ? (
-                        <EmptyState t={t} onAdd={() => setShowAddSheet(true)} />
+                    ) : visibleListings.length === 0 ? (
+                        mineOnly ? (
+                            <div className="flex flex-col items-center gap-4 py-12 text-center">
+                                <p className="text-base font-bold text-black">
+                                    {t('marketplace.noMyListings', { defaultValue: "You haven't posted any listings yet." })}
+                                </p>
+                            </div>
+                        ) : (
+                            <EmptyState t={t} onAdd={() => setShowAddSheet(true)} />
+                        )
                     ) : (
                         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-                            {filtered.map(product => (
+                            {visibleListings.map(product => (
                                 <ProductCard key={product.id} product={product} t={t} />
                             ))}
                         </div>
@@ -491,7 +557,7 @@ export default function MarketplacePage() {
                 <button
                     type="button"
                     onClick={() => setShowAddSheet(true)}
-                    className="clay-fab fixed bottom-5 right-5 inline-flex h-14 w-14 items-center justify-center text-green-50"
+                    className="clay-fab fixed bottom-5 right-20 inline-flex h-14 w-14 items-center justify-center text-green-50 sm:bottom-5 sm:right-24"
                     aria-label={t("marketplacePage.addItem")}
                     style={{ zIndex: 30 }}
                 >
