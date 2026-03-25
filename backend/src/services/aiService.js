@@ -7,9 +7,6 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Use gemini-1.5-flash — fast, cheap, supports vision
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
 const SYSTEM_PROMPT = `You are a waste management expert for rural India.
 When shown an image of waste, identify what kind of waste it is and provide
 clear, numbered, step-by-step disposal instructions in simple language that
@@ -29,6 +26,12 @@ no code fences, no extra explanation — only raw JSON:
   "tip": "<one practical tip about recycling or reuse value of this waste>"
 }`;
 
+// Use gemini-2.5-flash — fast, cheap, supports vision
+const model = genAI.getGenerativeModel({ 
+  model: 'gemini-2.5-flash',
+  systemInstruction: SYSTEM_PROMPT
+});
+
 /**
  * Analyze a waste image using Gemini Vision.
  * @param {Buffer} imageBuffer - Raw image bytes from multer
@@ -39,9 +42,8 @@ export async function analyzeWasteImage(imageBuffer, mimeType) {
   // Convert buffer to base64
   const base64Image = imageBuffer.toString('base64');
 
-  // Build the multimodal prompt: system context + image + instruction
+  // Build the multimodal prompt: image + instruction
   const result = await model.generateContent([
-    SYSTEM_PROMPT,
     {
       inlineData: {
         mimeType: mimeType || 'image/jpeg',

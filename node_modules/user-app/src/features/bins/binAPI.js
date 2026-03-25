@@ -6,3 +6,8 @@ export const getBins = (villageId) => {
 };
 
 export const getBinById = (id) => api.get(`/bins/${id}`).then((r) => r.data);
+
+export const getRecyclingCenters = (villageId) => {
+	const path = villageId ? `/recycling-centers?village_id=${villageId}` : '/recycling-centers';
+	return api.get(path).then((r) => r.data.centers || []);
+};

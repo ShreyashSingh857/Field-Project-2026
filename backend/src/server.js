@@ -5,6 +5,8 @@ import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import binsRoutes from './routes/binsRoutes.js';
+import recyclingRoutes from './routes/recyclingRoutes.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -38,6 +40,8 @@ app.use('/api/ai/', aiLimiter);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/bins', binsRoutes);
+app.use('/api/recycling-centers', recyclingRoutes);
 
 // ── Global error handler (must be last) ────────────────────
 app.use((err, _req, res, _next) => {
