@@ -1,33 +1,28 @@
-// backend/src/controllers/aiController.js
-import { analyzeWasteImage } from '../services/aiService.js';
+import OpenAI, { toFile } from 'openai';
+import dotenv from 'dotenv';
+dotenv.config();
 
-/**
- * POST /api/ai/scan
- * Accepts multipart/form-data with a `photo` field (image file).
- * Returns waste identification and disposal instructions from Gemini.
- */
-export async function scanWaste(req, res) {
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export const transcribeAudio = async (req, res) => {
   try {
-    // multer puts the file on req.file
     if (!req.file) {
-      return res.status(400).json({ error: 'No photo uploaded. Send a multipart/form-data request with a "photo" field.' });
+      return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    const { buffer, mimetype } = req.file;
+    // Convert multer memory buffer into an OpenAI-compatible File object
+    const file = await toFile(req.file.buffer, 'audio.webm', { type: 'audio/webm' });
 
-    // Validate it is actually an image
-    if (!mimetype.startsWith('image/')) {
-      return res.status(400).json({ error: 'Uploaded file must be an image.' });
-    }
-
-    // Call Gemini via aiService
-    const result = await analyzeWasteImage(buffer, mimetype);
-
-    return res.status(200).json(result);
-  } catch (err) {
-    console.error('[AI Scan Error]', err?.message || err);
-    return res.status(500).json({
-      error: 'AI analysis failed. Please try again.',
+    const response = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
     });
+
+    res.json({ text: response.text });
+  } catch (error) {
+    console.error('OpenAI Whisper Error:', error);
+    res.status(500).json({ error: 'Failed to transcribe audio' });
   }
-}
+};

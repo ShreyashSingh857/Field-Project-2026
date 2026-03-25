@@ -1,12 +1,13 @@
-// backend/src/server.js
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
+import { supabase } from './config/supabaseClient.js';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import binsRoutes from './routes/binsRoutes.js';
 import recyclingRoutes from './routes/recyclingRoutes.js';
+import aiRoute from './routes/aiRoute.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -17,7 +18,6 @@ app.use(cors({ origin: [userOrigin], credentials: true }));
 app.use(express.json());
 
 // ── Rate limiting ───────────────────────────────────────────
-// General limiter: 100 req / 15 min per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -26,13 +26,12 @@ const generalLimiter = rateLimit({
 });
 app.use('/api/', generalLimiter);
 
-// AI limiter: 10 req / 60 sec per IP (Gemini calls are expensive)
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many scan requests. Please wait a moment and try again.' },
+  message: { error: 'Too many requests. Please wait a moment and try again.' },
 });
 app.use('/api/ai/', aiLimiter);
 
@@ -40,13 +39,13 @@ app.use('/api/ai/', aiLimiter);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/ai/speech', aiRoute);
 app.use('/api/bins', binsRoutes);
 app.use('/api/recycling-centers', recyclingRoutes);
 
-// ── Global error handler (must be last) ────────────────────
+// ── Global error handler ────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error('[Unhandled Error]', err?.message || err);
-  // Handle multer-specific errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'Image too large. Maximum size is 5MB.' });
   }

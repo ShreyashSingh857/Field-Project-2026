@@ -60,9 +60,14 @@ export default function ReportIssuePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  /* ── Speech-to-text state ── */
+  /* ── Hybrid Speech-to-text state ── */
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [livePreview, setLivePreview] = useState('');
+  
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   /* ── Geolocation ── */
   useEffect(() => {
@@ -83,36 +88,93 @@ export default function ReportIssuePage() {
     e.target.value = '';
   };
 
-  /* ── Speech recognition ── */
-  const toggleMic = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Try Chrome on Android.');
-      return;
+  /* ── Hybrid Speech recognition & Recording ── */
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setIsTranscribing(true);
+        try {
+          // Create WebM audio blob
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'voice-note.webm');
+          
+          // Send to Whisper via backend
+          const { data } = await api.post('/ai/speech/transcribe', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          
+          if (data?.text) {
+            setDescription((prev) => (prev ? `${prev} ${data.text}` : data.text).trim());
+          }
+        } catch (error) {
+          console.error('Whisper transcription failed', error);
+          // If backend fails, fallback gracefully by appending the live preview text (which may be less accurate)
+          setDescription((prev) => (prev ? `${prev} ${livePreview}` : livePreview).trim());
+        } finally {
+          setIsTranscribing(false);
+          setLivePreview('');
+        }
+      };
+
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setIsListening(true);
+      setLivePreview('');
+
+      // Also start Web Speech API for real-time live preview (rough text)
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.lang = 'hi-IN'; // Hindi defaults, accepts english too
+        rec.continuous = true;
+        rec.interimResults = true;
+        
+        rec.onresult = (event) => {
+          let preview = '';
+          for (let i = 0; i < event.results.length; i++) {
+            preview += event.results[i][0].transcript;
+          }
+          setLivePreview(preview);
+        };
+        
+        rec.onerror = () => { /* Ignore errors as Whisper is primary fallback */ };
+        rec.start();
+        recognitionRef.current = rec;
+      }
+    } catch (err) {
+      alert('Microphone access is required to use this feature.');
+      console.error(err);
     }
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
-    const rec = new SpeechRecognition();
-    rec.lang = 'hi-IN'; // Hindi default; browser will also accept English
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setDescription((prev) => (prev ? `${prev} ${transcript}` : transcript));
-    };
-    rec.onerror = () => setIsListening(false);
-    rec.onend = () => setIsListening(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsListening(true);
-  }, [isListening]);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsListening(false);
+  };
+
+  const toggleMic = () => {
+    if (isListening) stopRecording();
+    else startRecording();
+  };
 
   /* ── Submit ── */
   const handleSubmit = async () => {
-    if (!description.trim()) return;
+    if (!description.trim() || isTranscribing) return;
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -211,34 +273,46 @@ export default function ReportIssuePage() {
                     </div>
                     <p className="text-sm font-medium text-black">{t('reportIssue.descLabel', { defaultValue: 'Describe the problem' })}</p>
                   </div>
+                  
                   {/* Mic toggle */}
                   <button
                     type="button"
                     onClick={toggleMic}
-                    title={isListening ? 'Stop listening' : 'Speak your report (Hindi / English)'}
+                    disabled={isTranscribing}
+                    title={isListening ? 'Stop recording' : 'Record voice note'}
                     className="clay-btn-round inline-flex h-9 w-9 items-center justify-center transition"
                     style={{
-                      backgroundColor: isListening ? '#FFEBEE' : 'var(--clay-card)',
-                      color: isListening ? '#C62828' : 'var(--clay-primary)',
+                      backgroundColor: isTranscribing ? 'var(--clay-bg)' : isListening ? '#FFEBEE' : 'var(--clay-card)',
+                      color: isTranscribing ? 'var(--clay-muted)' : isListening ? '#C62828' : 'var(--clay-primary)',
                       animation: isListening ? 'mic-pulse 1s ease-in-out infinite' : 'none',
                     }}
                   >
-                    {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </button>
                 </div>
+                
+                {/* Live Preview Text & Loading Indicator */}
                 {isListening && (
-                  <p className="mb-1.5 flex items-center gap-1.5 text-xs" style={{ color: '#C62828' }}>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs text-red-600 font-medium">
                     <span className="inline-block h-2 w-2 rounded-full bg-red-500" style={{ animation: 'mic-pulse 1s infinite' }} />
-                    Listening… speak your report in Hindi or English
+                    Recording... {livePreview}
                   </p>
                 )}
+                {isTranscribing && (
+                  <p className="mb-2 flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Enhancing text with AI...
+                  </p>
+                )}
+
                 <textarea
                   rows={3}
                   maxLength={500}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder={t('reportIssue.descPlaceholder', { defaultValue: 'E.g. Garbage overflowing near the school gate...' })}
-                  className="clay-lang-box w-full resize-none px-3 py-2 text-sm text-black outline-none"
+                  className="clay-lang-box w-full resize-none px-3 py-2 text-sm text-black outline-none disabled:opacity-50"
+                  disabled={isListening || isTranscribing}
                 />
                 <p className="mt-1 text-right text-xs" style={{ color: 'var(--clay-muted)' }}>{description.length} / 500</p>
               </section>
@@ -336,7 +410,7 @@ export default function ReportIssuePage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={submitting || !description.trim()}
+                disabled={submitting || !description.trim() || isTranscribing}
                 className="flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold text-white disabled:opacity-70"
                 style={{ background: 'linear-gradient(135deg, var(--clay-primary), var(--clay-secondary))' }}
               >
