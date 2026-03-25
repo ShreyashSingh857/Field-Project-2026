@@ -11,5 +11,8 @@
     "dev:user": "npm run dev --workspace=user-app",
     "dev:worker": "npm run dev --workspace=worker-app",
     "dev:admin": "npm run dev --workspace=admin-app"
+  },
+  "dependencies": {
+    "i18next": "^25.10.2"
   }
 }

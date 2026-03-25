@@ -1,39 +1,27 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { initAuth, setUser } from './features/auth/authSlice';
 import { supabase } from './services/supabase';
+import { setUser } from './features/auth/authSlice';
 import AppRoutes from './routes/AppRoutes';
-import './App.css';
 
-function App() {
+export default function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Rehydrate session on first load
+    supabase.auth.getSession().then(({ data: { session } }) => {
       dispatch(setUser(session?.user ?? null));
     });
 
-    const bootstrapAuth = async () => {
-      const code = new URLSearchParams(window.location.search).get('code');
-      if (code) {
-        await supabase.auth.exchangeCodeForSession(code);
-        const clean = `${window.location.origin}${window.location.pathname}`;
-        window.history.replaceState({}, '', clean);
+    // Listen for login/logout/token refresh events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        dispatch(setUser(session?.user ?? null));
       }
-      dispatch(initAuth());
-    };
-
-    bootstrapAuth();
+    );
 
     return () => subscription.unsubscribe();
   }, [dispatch]);
 
-  return (
-    <Router>
-      <AppRoutes />
-    </Router>
-  );
+  return <AppRoutes />;
 }
-
-export default App;
