@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
 	AlertTriangle,
@@ -32,6 +32,10 @@ export default function Dashboard() {
 	const { t, i18n } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const navigate = useNavigate();
+
+	const user = useSelector((s) => s.auth.user);
+	const userName = user?.user_metadata?.name || user?.user_metadata?.full_name || '';
+	const villageName = user?.user_metadata?.village_name || '';
 
 	const cards = useMemo(
 		() => [
@@ -125,6 +129,18 @@ export default function Dashboard() {
 							</p>
 						</div>
 					</div>
+					{userName ? (
+						<div className="ml-auto text-right">
+							<p className="max-w-[100px] truncate text-xs font-semibold text-black sm:max-w-[140px]">
+								{userName}
+							</p>
+							{villageName ? (
+								<p className="truncate text-[10px]" style={{ color: "var(--clay-muted)" }}>
+									{villageName}
+								</p>
+							) : null}
+						</div>
+					) : null}
 				</header>
 
 				{/* ── Drawer overlay + sidebar ── */}
@@ -234,10 +250,16 @@ export default function Dashboard() {
 				<main className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 pb-24 sm:px-5 sm:py-5 md:px-6 md:py-6 lg:px-8">
 					<div>
 						<h1 className="text-lg font-bold text-black sm:text-xl md:text-2xl">
-							{t("dashboardTitle")}
+							{userName
+								? `👋 ${t('dashboard.hello', { defaultValue: 'Hello' })}, ${userName}!`
+								: t("dashboardTitle")
+							}
 						</h1>
 						<p className="text-sm md:text-base" style={{ color: "var(--clay-muted)" }}>
-							{t("dashboardSubtitle")}
+							{villageName
+								? `${villageName} · ${t("dashboardSubtitle")}`
+								: t("dashboardSubtitle")
+							}
 						</p>
 					</div>
 
