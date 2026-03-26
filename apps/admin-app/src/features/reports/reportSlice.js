@@ -1,58 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
-    fetchReports,
-    generateTaskReport,
-    generateWorkerReport,
-    generateIssueReport,
     getReportById,
     downloadReport,
 } from './reportAPI';
 
 // Async Thunks
-export const fetchReportsThunk = createAsyncThunk(
-    'reports/fetchReports',
-    async ({ adminId, scope, filters }, { rejectWithValue }) => {
-        try {
-            return await fetchReports(adminId, scope, filters);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
-export const generateTaskReportThunk = createAsyncThunk(
-    'reports/generateTaskReport',
-    async ({ reportData, adminId }, { rejectWithValue }) => {
-        try {
-            return await generateTaskReport(reportData, adminId);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
-export const generateWorkerReportThunk = createAsyncThunk(
-    'reports/generateWorkerReport',
-    async ({ reportData, adminId }, { rejectWithValue }) => {
-        try {
-            return await generateWorkerReport(reportData, adminId);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
-export const generateIssueReportThunk = createAsyncThunk(
-    'reports/generateIssueReport',
-    async ({ reportData, adminId }, { rejectWithValue }) => {
-        try {
-            return await generateIssueReport(reportData, adminId);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
 export const getReportByIdThunk = createAsyncThunk(
     'reports/getReportById',
     async (reportId, { rejectWithValue }) => {
@@ -96,69 +48,6 @@ const reportSlice = createSlice({
         },
     },
     extraReducers: (builder) => {
-        // Fetch Reports
-        builder
-            .addCase(fetchReportsThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(fetchReportsThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list = action.payload;
-            })
-            .addCase(fetchReportsThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
-        // Generate Task Report
-        builder
-            .addCase(generateTaskReportThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(generateTaskReportThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list.push(action.payload);
-                state.selectedReport = action.payload;
-            })
-            .addCase(generateTaskReportThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
-        // Generate Worker Report
-        builder
-            .addCase(generateWorkerReportThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(generateWorkerReportThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list.push(action.payload);
-                state.selectedReport = action.payload;
-            })
-            .addCase(generateWorkerReportThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
-        // Generate Issue Report
-        builder
-            .addCase(generateIssueReportThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(generateIssueReportThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list.push(action.payload);
-                state.selectedReport = action.payload;
-            })
-            .addCase(generateIssueReportThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
         // Get Report By ID
         builder
             .addCase(getReportByIdThunk.pending, (state) => {

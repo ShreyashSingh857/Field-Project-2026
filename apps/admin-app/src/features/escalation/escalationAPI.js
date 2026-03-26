@@ -1,112 +1,211 @@
 import supabase from "../../services/supabaseClient";
 
 /**
- * Fetch all escalations with optional filtering
+ * Fetch overdue tasks in admin's jurisdiction
+ * Overdue tasks are those where due_at < today and status is not completed/cancelled
  * @param {string} adminId - Admin ID
- * @param {string} scope - Admin's jurisdiction scope
- * @param {Object} filters - Optional filters (status, priority, task_id)
- * @returns {Promise<Array>} List of escalations
+ * @returns {Promise<Array>} List of overdue tasks
  */
-export const fetchEscalations = async (adminId, scope, filters = {}) => {
+export const fetchOverdueItems = async (adminId) => {
     try {
-        let query = supabase.from("escalations").select(
-            `id,
-       escalation_id,
-       task_id,
-       issue_id,
-       reason,
-       priority,
-       status,
-       escalated_by,
-       assigned_to,
-       created_at,
-       resolved_at,
-       tasks(id, task_id, description, location),
-       assigned_admin:admins(id, name, email, role),
-       escalated_by_admin:admins(id, name, email, role),
-       workers(id, employee_id, name, phone)`
-        );
+        const today = new Date().toISOString().split("T")[0];
 
-        // Apply scope filtering
-        if (scope && scope !== "national") {
-            query = query.eq("jurisdiction_scope", scope);
-        }
-
-        // Apply provided filters
-        if (filters.status) {
-            query = query.eq("status", filters.status);
-        }
-        if (filters.priority) {
-            query = query.eq("priority", filters.priority);
-        }
-        if (filters.task_id) {
-            query = query.eq("task_id", filters.task_id);
-        }
-        if (filters.assigned_to) {
-            query = query.eq("assigned_to", filters.assigned_to);
-        }
-
-        const { data, error } = await query.order("created_at", {
-            ascending: false,
-        });
+        const { data, error } = await supabase
+            .from("tasks")
+            .select(
+                "id, title, description, status, priority, due_at, created_by, " +
+                "assigned_worker_id, village_id, " +
+                "worker:workers(id, name, phone), " +
+                "village:villages(id, name)"
+            )
+            .lt("due_at", today)
+            .not("status", "in", "(completed,cancelled)")
+            .eq("created_by", adminId)
+            .order("due_at", { ascending: true });
 
         if (error) throw error;
-        return data || [];
+
+        // Calculate days overdue for each task
+        return (data || []).map((task) => {
+            const dueDate = new Date(task.due_at);
+            const todayDate = new Date(today);
+            const daysOverdue = Math.floor(
+                (todayDate - dueDate) / (1000 * 60 * 60 * 24)
+            );
+
+            return {
+                id: task.id,
+                taskId: task.id,
+                taskTitle: task.title,
+                description: task.description,
+                village: task.village?.name || "Unknown",
+                worker: task.worker?.name || "Unassigned",
+                workerId: task.assigned_worker_id,
+                daysOverdue,
+                status: task.status,
+                priority: task.priority,
+                dueAt: task.due_at,
+            };
+        });
     } catch (error) {
-        console.error("Error fetching escalations:", error);
-        throw new Error(`Failed to fetch escalations: ${error.message}`);
+        console.error("Error fetching overdue items:", error);
+        throw new Error(`Failed to fetch overdue items: ${error.message}`);
     }
 };
 
 /**
- * Create an escalation
- * @param {Object} escalationData - Escalation details
- * @param {string} adminId - Admin creating escalation
- * @returns {Promise<Object>} Created escalation
+ * Add a resolution note to a task
+ * @param {string} taskId - Task ID
+ * @param {string} note - Resolution note
+ * @returns {Promise<Object>} Updated task
  */
-export const createEscalation = async (escalationData, adminId) => {
+export const addResolutionNote = async (taskId, note) => {
     try {
-        // Generate escalation ID
-        const { data: lastEscalation } = await supabase
-            .from("escalations")
-            .select("escalation_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
+        // Fetch current task
+        const { data: task, error: fetchError } = await supabase
+            .from("tasks")
+            .select("description")
+            .eq("id", taskId)
+            .single();
 
-        let nextNumber = 1;
-        if (lastEscalation && lastEscalation.length > 0) {
-            const match = lastEscalation[0].escalation_id.match(/ESC-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
-        }
+        if (fetchError) throw fetchError;
 
-        const escalationId = `ESC-${String(nextNumber).padStart(5, "0")}`;
+        // Append note to description
+        const timestamp = new Date().toLocaleString("en-IN");
+        const updatedDescription = `${task.description}\n\n[Note - ${timestamp}]: ${note}`;
 
         const { data, error } = await supabase
-            .from("escalations")
-            .insert([
-                {
-                    escalation_id: escalationId,
-                    task_id: escalationData.task_id || null,
-                    issue_id: escalationData.issue_id || null,
-                    reason: escalationData.reason,
-                    priority: escalationData.priority || "high",
-                    description: escalationData.description,
-                    status: "open",
-                    escalated_by: adminId,
-                    assigned_to: escalationData.assigned_to || null,
-                    created_at: new Date().toISOString(),
-                },
-            ])
+            .from("tasks")
+            .update({
+                description: updatedDescription,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskId)
             .select()
             .single();
 
         if (error) throw error;
         return data;
     } catch (error) {
-        console.error("Error creating escalation:", error);
-        throw new Error(`Failed to create escalation: ${error.message}`);
+        console.error("Error adding resolution note:", error);
+        throw new Error(`Failed to add note: ${error.message}`);
+    }
+};
+
+/**
+ * Mark an overdue task as resolved
+ * @param {string} taskId - Task ID
+ * @returns {Promise<Object>} Updated task
+ */
+export const markTaskResolved = async (taskId) => {
+    try {
+        const { data, error } = await supabase
+            .from("tasks")
+            .update({
+                status: "completed",
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error("Error marking task resolved:", error);
+        throw new Error(`Failed to mark as resolved: ${error.message}`);
+    }
+};
+
+/**
+ * Reassign a task to a different worker
+ * @param {string} taskId - Task ID
+ * @param {string} workerId - New worker ID
+ * @returns {Promise<Object>} Updated task
+ */
+export const reassignTask = async (taskId, workerId) => {
+    try {
+        const { data, error } = await supabase
+            .from("tasks")
+            .update({
+                assigned_worker_id: workerId,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error("Error reassigning task:", error);
+        throw new Error(`Failed to reassign task: ${error.message}`);
+    }
+};
+
+/**
+ * Escalate a task to higher authority (increase priority)
+ * @param {string} taskId - Task ID
+ * @param {string} escalationReason - Reason for escalation
+ * @returns {Promise<Object>} Updated task
+ */
+export const escalateTask = async (taskId, escalationReason) => {
+    try {
+        const { data: task, error: fetchError } = await supabase
+            .from("tasks")
+            .select("description, priority")
+            .eq("id", taskId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Map priority escalation: low -> normal -> urgent
+        const priorityMap = { low: "normal", normal: "urgent", urgent: "urgent" };
+        const newPriority = priorityMap[task.priority] || "urgent";
+
+        // Add escalation note
+        const timestamp = new Date().toLocaleString("en-IN");
+        const escalationNote = `\n\n[ESCALATION - ${timestamp}]: ${escalationReason}`;
+        const updatedDescription = `${task.description}${escalationNote}`;
+
+        const { data, error } = await supabase
+            .from("tasks")
+            .update({
+                priority: newPriority,
+                description: updatedDescription,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error("Error escalating task:", error);
+        throw new Error(`Failed to escalate task: ${error.message}`);
+    }
+};
+
+/**
+ * Get available workers in an admin's jurisdiction for reassignment
+ * @param {string} adminId - Admin ID
+ * @returns {Promise<Array>} List of workers
+ */
+export const getAvailableWorkers = async (adminId) => {
+    try {
+        const { data, error } = await supabase
+            .from("workers")
+            .select("id, name, phone, is_active")
+            .eq("created_by_admin_id", adminId)
+            .eq("is_active", true)
+            .order("name");
+
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error("Error fetching available workers:", error);
+        throw new Error(`Failed to fetch workers: ${error.message}`);
     }
 };
 

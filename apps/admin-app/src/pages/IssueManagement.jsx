@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { X, Eye, Loader, CheckCircle, XCircle } from 'lucide-react';
 import { selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
+import { fetchIssues, convertIssueToTask, rejectIssue } from '../features/issues/issueAPI';
+import supabase from '../services/supabaseClient';
 import { PRIORITIES, TASK_TYPES, formatDate } from '../utils/constants';
 
 function IssueManagement() {
@@ -11,84 +13,86 @@ function IssueManagement() {
     const { toast, showToast } = useToast();
 
     const [issues, setIssues] = useState([]);
+    const [workers, setWorkers] = useState([]);
     const [filter, setFilter] = useState('open');
     const [selectedIssue, setSelectedIssue] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const [convertFormData, setConvertFormData] = useState({
+        type: 'other',
         priority: 2,
-        assignedWorker: '',
-        dueDate: '',
+        assigned_worker_id: '',
+        due_at: '',
     });
     const [rejectReason, setRejectReason] = useState('');
-    const [workers] = useState([
-        { id: 1, name: 'Rajesh Kumar' },
-        { id: 2, name: 'Priya Singh' },
-    ]);
 
     useEffect(() => {
-        fetchIssues();
-    }, [adminId]);
+        loadIssues();
+        loadWorkers();
+    }, [adminId, filter]);
 
-    const fetchIssues = async () => {
+    const loadIssues = async () => {
         try {
             setLoading(true);
             setError(null);
-
-            // Mock data
-            setIssues([
-                {
-                    id: 1,
-                    description: 'Garbage scattered near market',
-                    location: 'Market Square',
-                    reportedBy: 'Rajesh Patel',
-                    photo: 'https://via.placeholder.com/40',
-                    status: 'open',
-                    reportedAt: '2026-03-21T10:30:00',
-                    fullDescription: 'Large amount of garbage scattered near the market area. Needs immediate cleanup.',
-                },
-                {
-                    id: 2,
-                    description: 'Overflowing bin in residential area',
-                    location: 'Ward 5',
-                    reportedBy: 'Priya Sharma',
-                    photo: 'https://via.placeholder.com/40',
-                    status: 'open',
-                    reportedAt: '2026-03-21T14:15:00',
-                    fullDescription: 'Bin overflow causing spillage. Workers needed.',
-                },
-            ]);
-
+            const data = await fetchIssues({ status: filter });
+            setIssues(data);
             showToast('Issues loaded successfully', 'success');
         } catch (err) {
             setError('Failed to fetch issues');
-            showToast('Failed to load issues', 'error');
+            showToast('Failed to load issues: ' + err.message, 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadWorkers = async () => {
+        try {
+            const { data, error: err } = await supabase
+                .from('workers')
+                .select('id, employee_id, name, is_active')
+                .eq('created_by_admin_id', adminId)
+                .eq('is_active', true);
+
+            if (err) throw err;
+            setWorkers(data || []);
+        } catch (err) {
+            console.error('Error loading workers:', err);
         }
     };
 
     const handleConvertToTask = async (e) => {
         e.preventDefault();
 
-        if (!convertFormData.assignedWorker || !convertFormData.dueDate) {
-            showToast('Please fill in all fields', 'error');
+        if (!convertFormData.type || !convertFormData.due_at) {
+            showToast('Please fill in all required fields', 'error');
             return;
         }
 
         try {
             if (selectedIssue) {
-                setIssues(
-                    issues.map((issue) =>
-                        issue.id === selectedIssue.id ? { ...issue, status: 'assigned' } : issue
-                    )
+                await convertIssueToTask(
+                    selectedIssue.id,
+                    {
+                        type: convertFormData.type,
+                        priority: convertFormData.priority,
+                        assigned_worker_id: convertFormData.assigned_worker_id || null,
+                    },
+                    adminId
                 );
-                showToast('Issue converted to task', 'success');
+                showToast('Issue converted to task successfully', 'success');
+                await loadIssues();
                 setSelectedIssue(null);
+                setConvertFormData({
+                    type: 'other',
+                    priority: 2,
+                    assigned_worker_id: '',
+                    due_at: '',
+                });
             }
         } catch (err) {
-            showToast('Failed to convert issue', 'error');
+            showToast('Failed to convert issue: ' + err.message, 'error');
         }
     };
 
@@ -102,17 +106,14 @@ function IssueManagement() {
 
         try {
             if (selectedIssue) {
-                setIssues(
-                    issues.map((issue) =>
-                        issue.id === selectedIssue.id ? { ...issue, status: 'rejected' } : issue
-                    )
-                );
-                showToast('Issue rejected', 'success');
+                await rejectIssue(selectedIssue.id, rejectReason, adminId);
+                showToast('Issue rejected successfully', 'success');
+                await loadIssues();
                 setSelectedIssue(null);
                 setRejectReason('');
             }
         } catch (err) {
-            showToast('Failed to reject issue', 'error');
+            showToast('Failed to reject issue: ' + err.message, 'error');
         }
     };
 
@@ -213,14 +214,16 @@ function IssueManagement() {
                                             {issue.description}
                                         </span>
                                     </td>
-                                    <td>{issue.location}</td>
-                                    <td>{issue.reportedBy}</td>
+                                    <td>{issue.location_address || 'N/A'}</td>
+                                    <td>{issue.reported_by?.name || 'Unknown'}</td>
                                     <td>
-                                        <img
-                                            src={issue.photo}
-                                            alt="Issue"
-                                            style={{ width: '40px', height: '40px', borderRadius: '6px' }}
-                                        />
+                                        {issue.photo_url && (
+                                            <img
+                                                src={issue.photo_url}
+                                                alt="Issue"
+                                                style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }}
+                                            />
+                                        )}
                                     </td>
                                     <td>
                                         <div className={getStatusBadge(issue.status)}>
@@ -228,7 +231,7 @@ function IssueManagement() {
                                         </div>
                                     </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        {new Date(issue.reportedAt).toLocaleString('en-IN')}
+                                        {new Date(issue.created_at).toLocaleString('en-IN')}
                                     </td>
                                     <td>
                                         <button
@@ -285,11 +288,11 @@ function IssueManagement() {
                     </div>
 
                     <div style={{ padding: '20px' }}>
-                        {selectedIssue.photo && (
+                        {selectedIssue.photo_url && (
                             <img
-                                src={selectedIssue.photo}
+                                src={selectedIssue.photo_url}
                                 alt="Issue"
-                                style={{ width: '100%', borderRadius: '8px', marginBottom: '16px' }}
+                                style={{ width: '100%', borderRadius: '8px', marginBottom: '16px', maxHeight: '200px', objectFit: 'cover' }}
                             />
                         )}
 
@@ -298,7 +301,7 @@ function IssueManagement() {
                                 Description
                             </div>
                             <div style={{ fontSize: '14px', fontWeight: '600' }}>
-                                {selectedIssue.fullDescription}
+                                {selectedIssue.description}
                             </div>
                         </div>
 
@@ -306,7 +309,7 @@ function IssueManagement() {
                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '4px' }}>
                                 Location Address
                             </div>
-                            <div>{selectedIssue.location}</div>
+                            <div>{selectedIssue.location_address || 'N/A'}</div>
                         </div>
 
                         <div style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -314,21 +317,28 @@ function IssueManagement() {
                                 <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '4px' }}>
                                     Latitude
                                 </div>
-                                <div style={{ fontSize: '12px' }}>{selectedIssue.coordinates.lat}</div>
+                                <div style={{ fontSize: '12px' }}>{selectedIssue.location_lat || 'N/A'}</div>
                             </div>
                             <div>
                                 <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '4px' }}>
                                     Longitude
                                 </div>
-                                <div style={{ fontSize: '12px' }}>{selectedIssue.coordinates.lng}</div>
+                                <div style={{ fontSize: '12px' }}>{selectedIssue.location_lng || 'N/A'}</div>
                             </div>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '4px' }}>
+                                Reported By
+                            </div>
+                            <div>{selectedIssue.reported_by?.name || 'Unknown'}</div>
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '4px' }}>
                                 Reported Date/Time
                             </div>
-                            <div>{new Date(selectedIssue.reportedAt).toLocaleString('en-IN')}</div>
+                            <div>{new Date(selectedIssue.created_at).toLocaleString('en-IN')}</div>
                         </div>
 
                         {selectedIssue.status === 'open' && (
@@ -339,6 +349,26 @@ function IssueManagement() {
                                         Convert to Task
                                     </h3>
                                     <form onSubmit={handleConvertToTask}>
+                                        <div className="admin-form-group">
+                                            <label className="admin-form-label required">Task Type</label>
+                                            <select
+                                                className="admin-form-select"
+                                                value={convertFormData.type}
+                                                onChange={(e) =>
+                                                    setConvertFormData({
+                                                        ...convertFormData,
+                                                        type: e.target.value,
+                                                    })
+                                                }
+                                                required
+                                            >
+                                                <option value="bin_clean">Bin Cleanup</option>
+                                                <option value="litter_pickup">Litter Pickup</option>
+                                                <option value="drain_clearance">Drain Clearance</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                        </div>
+
                                         <div className="admin-form-group">
                                             <label className="admin-form-label">Priority</label>
                                             <select
@@ -358,41 +388,24 @@ function IssueManagement() {
                                         </div>
 
                                         <div className="admin-form-group">
-                                            <label className="admin-form-label">Assign Worker</label>
+                                            <label className="admin-form-label">Assign Worker (Optional)</label>
                                             <select
                                                 className="admin-form-select"
-                                                value={convertFormData.assignedWorker}
+                                                value={convertFormData.assigned_worker_id}
                                                 onChange={(e) =>
                                                     setConvertFormData({
                                                         ...convertFormData,
-                                                        assignedWorker: e.target.value,
+                                                        assigned_worker_id: e.target.value,
                                                     })
                                                 }
-                                                required
                                             >
                                                 <option value="">Select a worker</option>
                                                 {workers.map((w) => (
                                                     <option key={w.id} value={w.id}>
-                                                        {w.name}
+                                                        {w.name} ({w.employee_id})
                                                     </option>
                                                 ))}
                                             </select>
-                                        </div>
-
-                                        <div className="admin-form-group">
-                                            <label className="admin-form-label">Due Date</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="admin-form-input"
-                                                value={convertFormData.dueDate}
-                                                onChange={(e) =>
-                                                    setConvertFormData({
-                                                        ...convertFormData,
-                                                        dueDate: e.target.value,
-                                                    })
-                                                }
-                                                required
-                                            />
                                         </div>
 
                                         <button type="submit" className="admin-btn-primary" style={{ width: '100%' }}>
@@ -408,7 +421,7 @@ function IssueManagement() {
                                     </h3>
                                     <form onSubmit={handleRejectIssue}>
                                         <div className="admin-form-group">
-                                            <label className="admin-form-label">Reason</label>
+                                            <label className="admin-form-label required">Reason</label>
                                             <textarea
                                                 className="admin-form-textarea"
                                                 placeholder="Reason for rejection"
@@ -422,11 +435,22 @@ function IssueManagement() {
                                             className="admin-btn-outline danger"
                                             style={{ width: '100%' }}
                                         >
-                                            Reject
+                                            Reject Issue
                                         </button>
                                     </form>
                                 </div>
                             </>
+                        )}
+
+                        {selectedIssue.status === 'rejected' && selectedIssue.rejection_reason && (
+                            <div style={{ backgroundColor: '#FFEBEE', border: '1px solid #EF5350', borderRadius: '8px', padding: '12px' }}>
+                                <div style={{ fontSize: '12px', color: '#C62828', fontWeight: '600', marginBottom: '4px' }}>
+                                    Rejection Reason
+                                </div>
+                                <div style={{ fontSize: '13px', color: '#D32F2F' }}>
+                                    {selectedIssue.rejection_reason}
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
