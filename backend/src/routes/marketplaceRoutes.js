@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
-import { getListings, createListing } from '../controllers/marketplaceController.js';
+import { getListings, createListing, deleteListing } from '../controllers/marketplaceController.js';
 
 const router = Router();
 const upload = multer({
@@ -12,7 +12,8 @@ const upload = multer({
   },
 });
 
-router.get('/', getListings);
+router.get('/', verifySupabaseAuth, getListings);
 router.post('/', verifySupabaseAuth, upload.single('photo'), createListing);
+router.delete('/:id', verifySupabaseAuth, deleteListing);
 
 export default router;

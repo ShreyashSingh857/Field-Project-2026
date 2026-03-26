@@ -1,8 +1,8 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { createListing, getListings } from './marketplaceAPI';
 
-export const fetchListings = createAsyncThunk('marketplace/fetch', async (villageId, { rejectWithValue }) => {
-	try { return await getListings(villageId); }
+export const fetchListings = createAsyncThunk('marketplace/fetch', async (filters, { rejectWithValue }) => {
+	try { return await getListings(filters); }
 	catch (err) { return rejectWithValue(err.response?.data?.error || 'Failed to load listings'); }
 });
 
