@@ -7,9 +7,7 @@ import {
     fetchOverdueItems,
     addResolutionNote,
     markTaskResolved,
-    reassignTask,
     escalateTask,
-    getAvailableWorkers,
 } from '../features/escalation/escalationAPI';
 
 function EscalationPanel() {
@@ -23,8 +21,6 @@ function EscalationPanel() {
     const [resolutionNotes, setResolutionNotes] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [availableWorkers, setAvailableWorkers] = useState([]);
-    const [selectedWorkerForReassign, setSelectedWorkerForReassign] = useState('');
 
     useEffect(() => {
         loadOverdueItems();
@@ -37,12 +33,6 @@ function EscalationPanel() {
 
             const data = await fetchOverdueItems(adminId);
             setOverdueItems(data);
-
-            // Load available workers for reassignment
-            if (data.length > 0) {
-                const workers = await getAvailableWorkers(adminId);
-                setAvailableWorkers(workers);
-            }
         } catch (err) {
             console.error('Error loading overdue items:', err);
             setError('Failed to load escalation data');
@@ -65,23 +55,6 @@ function EscalationPanel() {
         } catch (err) {
             console.error('Error saving note:', err);
             showToast('Failed to save note', 'error');
-        }
-    };
-
-    const handleReassign = async (taskId) => {
-        if (!selectedWorkerForReassign) {
-            showToast('Please select a worker', 'error');
-            return;
-        }
-
-        try {
-            await reassignTask(taskId, selectedWorkerForReassign);
-            showToast('Task reassigned successfully', 'success');
-            setSelectedWorkerForReassign('');
-            await loadOverdueItems();
-        } catch (err) {
-            console.error('Error reassigning task:', err);
-            showToast('Failed to reassign task', 'error');
         }
     };
 
@@ -114,6 +87,12 @@ function EscalationPanel() {
         }
     };
 
+    const getDaysOverdue = (createdAt) => {
+        if (!createdAt) return 0;
+        const ms = Date.now() - new Date(createdAt).getTime();
+        return Math.max(0, Math.floor(ms / 86400000));
+    };
+
     if (loading) {
         return (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--admin-muted)' }}>
@@ -141,7 +120,7 @@ function EscalationPanel() {
                     fontSize: '14px',
                 }}
             >
-                These are overdue tasks and unresolved issues from your jurisdiction.
+                These are unresolved issues from your jurisdiction.
             </p>
 
             {/* Overdue Tasks Table */}
@@ -154,19 +133,18 @@ function EscalationPanel() {
                         color: 'var(--admin-text)',
                     }}
                 >
-                    Overdue Tasks
+                    Open Issues
                 </h2>
 
                 {overdueItems.length === 0 ? (
-                    <div className="admin-table-empty">No overdue tasks</div>
+                    <div className="admin-table-empty">No open issues</div>
                 ) : (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
                             <thead>
                                 <tr>
-                                    <th>Task Title</th>
-                                    <th>Village</th>
-                                    <th>Assigned Worker</th>
+                                    <th>Issue</th>
+                                    <th>Location</th>
                                     <th>Days Overdue</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -184,13 +162,12 @@ function EscalationPanel() {
                                         }}
                                     >
                                         <td>
-                                            <strong>{item.taskTitle}</strong>
+                                            <strong>{item.description || 'Issue report'}</strong>
                                         </td>
-                                        <td>{item.village}</td>
-                                        <td>{item.worker}</td>
+                                        <td>{item.location_address || 'N/A'}</td>
                                         <td>
                                             <span style={{ color: '#A32D2D', fontWeight: '600' }}>
-                                                {item.daysOverdue} days
+                                                {getDaysOverdue(item.created_at)} days
                                             </span>
                                         </td>
                                         <td>
@@ -207,16 +184,6 @@ function EscalationPanel() {
                                         </td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '6px' }}>
-                                                <button
-                                                    className="admin-btn-outline admin-btn-sm"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleReassign(item.id);
-                                                    }}
-                                                    style={{ fontSize: '11px' }}
-                                                >
-                                                    Reassign
-                                                </button>
                                                 <button
                                                     className="admin-btn-outline admin-btn-sm"
                                                     onClick={(e) => {
@@ -262,34 +229,6 @@ function EscalationPanel() {
                     >
                         Task Actions
                     </h3>
-
-                    {/* Reassign Section */}
-                    <div style={{ marginBottom: '20px' }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px' }}>
-                            Reassign to Different Worker
-                        </h4>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <select
-                                className="admin-form-select"
-                                value={selectedWorkerForReassign}
-                                onChange={(e) => setSelectedWorkerForReassign(e.target.value)}
-                                style={{ flex: 1 }}
-                            >
-                                <option value="">Select a worker...</option>
-                                {availableWorkers.map((worker) => (
-                                    <option key={worker.id} value={worker.id}>
-                                        {worker.name} ({worker.phone})
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                className="admin-btn-primary"
-                                onClick={() => handleReassign(selectedTaskId)}
-                            >
-                                Reassign
-                            </button>
-                        </div>
-                    </div>
 
                     {/* Resolution Notes Section */}
                     <div className="admin-form-group">

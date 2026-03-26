@@ -149,6 +149,22 @@ function TaskManagement() {
         }
     };
 
+    const handleAssignWorker = async (taskId) => {
+        if (workers.length === 0) {
+            showToast('No active workers available for assignment', 'error');
+            return;
+        }
+        const workerId = window.prompt('Enter Worker ID to assign this task:');
+        if (!workerId) return;
+        try {
+            await assignWorker(taskId, workerId.trim());
+            await loadTasks();
+            showToast('Worker assigned successfully', 'success');
+        } catch (err) {
+            showToast('Failed to assign worker: ' + err.message, 'error');
+        }
+    };
+
     const filteredTasks = tasks.filter((task) => {
         if (filter === 'all') return true;
         return task.status === filter;
@@ -254,9 +270,7 @@ function TaskManagement() {
                                                 <button
                                                     className="admin-btn-outline admin-btn-sm"
                                                     style={{ fontSize: '11px' }}
-                                                    onClick={() => {
-                                                        // Open assign worker modal
-                                                    }}
+                                                    onClick={() => handleAssignWorker(task.id)}
                                                 >
                                                     Assign
                                                 </button>
@@ -300,15 +314,19 @@ function TaskManagement() {
                             </button>
                         </div>
                         <div className="admin-modal-body">
-                            {showProofModal.proofUrl && (
+                            {(showProofModal.proof_photo_url || showProofModal.proofUrl) && (
                                 <img
-                                    src={showProofModal.proofUrl}
+                                    src={showProofModal.proof_photo_url || showProofModal.proofUrl}
                                     alt="Task proof"
                                     style={{ width: '100%', borderRadius: '8px', marginBottom: '16px' }}
                                 />
                             )}
                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                <div><strong>Completed:</strong> 2026-03-20 10:30 AM</div>
+                                <div>
+                                    <strong>Completed:</strong> {showProofModal.completed_at
+                                        ? new Date(showProofModal.completed_at).toLocaleString('en-IN')
+                                        : 'N/A'}
+                                </div>
                             </div>
                         </div>
                     </div>

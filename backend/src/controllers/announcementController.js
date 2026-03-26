@@ -22,3 +22,58 @@ export async function getAnnouncements(req, res) {
     res.status(500).json({ error: 'Failed to fetch announcements' });
   }
 }
+
+export async function createAnnouncement(req, res) {
+  try {
+    const { title, content, target_village_id, is_pinned } = req.body || {};
+    if (!title || !content) {
+      return res.status(400).json({ error: 'title and content are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('announcements')
+      .insert({
+        created_by: req.admin.id,
+        title,
+        content,
+        target_village_id: target_village_id || null,
+        is_pinned: Boolean(is_pinned),
+        is_active: true,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.status(201).json({ announcement: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to create announcement' });
+  }
+}
+
+export async function updateAnnouncement(req, res) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('announcements')
+      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    res.json({ announcement: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to update announcement' });
+  }
+}
+
+export async function deleteAnnouncement(req, res) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('announcements')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to delete announcement' });
+  }
+}

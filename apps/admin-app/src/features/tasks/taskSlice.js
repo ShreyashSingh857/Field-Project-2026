@@ -211,4 +211,8 @@ export const selectTasksByStatus = (state, status) =>
 export const selectTasksByWorker = (state, workerId) =>
     state.tasks.list.filter((t) => t.assigned_to === workerId);
 
+export const selectTasks = (state) => state.tasks.list;
+export const selectTasksLoading = (state) => state.tasks.loading;
+export const selectTasksError = (state) => state.tasks.error;
+
 export default taskSlice.reducer;

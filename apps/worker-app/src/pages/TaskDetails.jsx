@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { completeTask, loadTaskDetails, startTask } from '../features/tasks/taskSlice';
+import { uploadPhoto } from '../features/photoUpload/photoSlice';
+import { getSLAColor } from '../features/sla/slaAPI';
+import { loadSLA, selectSLA } from '../features/sla/slaSlice';
 
 const TaskDetails = () => {
   const { id } = useParams();
@@ -10,20 +13,26 @@ const TaskDetails = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { selectedTask: task, loading, error } = useSelector((s) => s.tasks);
+  const sla = useSelector(selectSLA);
   useEffect(() => { if (id) dispatch(loadTaskDetails(id)); }, [dispatch, id]);
+  useEffect(() => { if (id) dispatch(loadSLA(id)); }, [dispatch, id]);
 
   const [qrScanned, setQrScanned] = useState(false);
   const [beforePhoto, setBeforePhoto] = useState(false);
   const [afterPhoto, setAfterPhoto] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceNote, setVoiceNote] = useState(null);
+  const [proofPhotoFile, setProofPhotoFile] = useState(null);
 
   const canComplete = qrScanned && beforePhoto && afterPhoto;
   const fillLevel = task.fill_level ?? task.bin?.fill_level ?? 0;
-  const dueAt = task.due_at ? new Date(task.due_at).toLocaleString() : 'N/A';
+  const dueAt = task.due_at
+    ? new Date(task.due_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'N/A';
 
   const handleComplete = () => {
     if (canComplete) {
+      dispatch(uploadPhoto({ file: proofPhotoFile, taskId: id }));
       dispatch(completeTask({ taskId: id, proofPhotoUrl: null }));
       navigate('/');
     }
@@ -112,6 +121,9 @@ const TaskDetails = () => {
             <div className="text-[13px] font-semibold text-red-700">
               SLA Goal: <span className="font-bold">{dueAt}</span>
             </div>
+          </div>
+          <div className="mt-2 inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold" style={{ backgroundColor: `${getSLAColor(sla?.data?.due_at || task.due_at)}22`, color: getSLAColor(sla?.data?.due_at || task.due_at) }}>
+            SLA Status: {(sla?.data?.status || task.status || 'pending').replace('_', ' ')}
           </div>
         </div>
 
@@ -247,6 +259,12 @@ const TaskDetails = () => {
         </div>
 
         {/* Submit Button */}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => setProofPhotoFile(e.target.files?.[0] || null)}
+        />
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 pb-[env(safe-area-inset-bottom)] z-40">
           <button 
             className="sm-btn-primary w-full shadow-lg shadow-green-900/20"

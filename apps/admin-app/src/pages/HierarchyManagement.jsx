@@ -3,13 +3,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Trash2, Loader } from 'lucide-react';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
-import { fetchSubAdmins, createSubAdmin, deactivateSubAdmin } from '../features/hierarchy/hierarchyAPI';
+import { createSubAdminThunk, deactivateSubAdminThunk, fetchSubAdminsThunk, selectHierarchyAdmins } from '../features/hierarchy/hierarchySlice';
 import { ROLE_LABELS, CHILD_ROLE } from '../utils/constants';
 
 function HierarchyManagement() {
     const dispatch = useDispatch();
     const role = useSelector(selectRole);
     const adminId = useSelector(selectAdminId);
+    const hierarchyAdmins = useSelector(selectHierarchyAdmins);
     const { toast, showToast } = useToast();
 
     const [admins, setAdmins] = useState([]);
@@ -21,6 +22,7 @@ function HierarchyManagement() {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
+        password: '',
         jurisdiction_name: '',
     });
 
@@ -32,8 +34,10 @@ function HierarchyManagement() {
         try {
             setLoading(true);
             setError(null);
-            const data = await fetchSubAdmins(adminId, role);
-            setAdmins(data);
+                        const result = await dispatch(fetchSubAdminsThunk({ adminId, adminRole: role }));
+                        if (result.type.endsWith('fulfilled')) {
+                            setAdmins(result.payload || []);
+                        }
             showToast('Admin list loaded', 'success');
         } catch (err) {
             setError('Failed to fetch admins');
@@ -59,7 +63,7 @@ function HierarchyManagement() {
     const handleCreateAdmin = async (e) => {
         e.preventDefault();
 
-        if (!formData.name || !formData.email || !formData.jurisdiction_name) {
+        if (!formData.name || !formData.email || !formData.password || !formData.jurisdiction_name) {
             showToast('Please fill in all fields', 'error');
             return;
         }
@@ -71,26 +75,29 @@ function HierarchyManagement() {
                 return;
             }
 
-            const result = await createSubAdmin(
-                {
-                    name: formData.name,
-                    email: formData.email,
-                    role: newRoleForCreation,
-                    jurisdiction_name: formData.jurisdiction_name,
-                },
-                adminId,
-                role
-            );
+                        const result = await dispatch(createSubAdminThunk({
+                            adminData: {
+                                name: formData.name,
+                                email: formData.email,
+                                password: formData.password,
+                                role: newRoleForCreation,
+                                jurisdiction_name: formData.jurisdiction_name,
+                            },
+                            adminId,
+                            adminRole: role,
+                        }));
+                        if (!result.type.endsWith('fulfilled')) throw new Error(result.payload || 'Failed');
 
             setSuccessCredentials({
-                name: result.name,
-                email: result.email,
-                temp_password: result.temp_password,
+                name: result.payload.name,
+                email: result.payload.email,
+                temp_password: formData.password,
             });
 
             setFormData({
                 name: '',
                 email: '',
+                password: '',
                 jurisdiction_name: '',
             });
 
@@ -105,7 +112,7 @@ function HierarchyManagement() {
         if (!window.confirm('Are you sure you want to deactivate this admin?')) return;
 
         try {
-            await deactivateSubAdmin(adminId);
+            await dispatch(deactivateSubAdminThunk({ subAdminId: adminId }));
             await loadAdmins();
             showToast('Admin deactivated successfully', 'success');
         } catch (err) {
@@ -331,6 +338,18 @@ function HierarchyManagement() {
                                             placeholder="Email address"
                                             value={formData.email}
                                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label required">Password</label>
+                                        <input
+                                            type="password"
+                                            className="admin-form-input"
+                                            placeholder="Set login password"
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                             required
                                         />
                                     </div>

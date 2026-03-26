@@ -95,3 +95,30 @@ export async function getIssues(req, res) {
     res.status(500).json({ error: 'Failed to fetch issues' });
   }
 }
+
+export async function updateIssue(req, res) {
+  try {
+    const updates = {};
+    const allowed = ['status', 'rejection_reason', 'created_task_id'];
+    for (const key of allowed) {
+      if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (req.admin?.id) {
+      updates.reviewed_by = req.admin.id;
+    }
+    updates.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('issue_reports')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to update issue' });
+  }
+}

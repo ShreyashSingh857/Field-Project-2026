@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { loginAdminAPI } from './authAPI';
+import { fetchCurrentAdmin, loginAdminAPI, logoutAdmin } from './authAPI';
 
 const getInitialAdmin = () => {
     try {
@@ -27,6 +27,14 @@ export const loginAdmin = createAsyncThunk(
     }
 );
 
+export const initAdmin = createAsyncThunk('auth/initAdmin', async (_, { rejectWithValue }) => {
+    try {
+        return await fetchCurrentAdmin();
+    } catch (err) {
+        return rejectWithValue(err.message || 'Failed to restore session');
+    }
+});
+
 const authSlice = createSlice({
     name: 'auth',
     initialState: {
@@ -37,7 +45,7 @@ const authSlice = createSlice({
     reducers: {
         logout(state) {
             state.admin = null;
-            localStorage.removeItem('admin_user');
+            logoutAdmin();
         },
         clearError(state) {
             state.error = null;
@@ -51,10 +59,25 @@ const authSlice = createSlice({
             })
             .addCase(loginAdmin.fulfilled, (state, action) => {
                 state.loading = false;
+                state.admin = action.payload.admin;
+                localStorage.setItem('admin_user', JSON.stringify(action.payload.admin));
+                if (action.payload.token) {
+                  localStorage.setItem('admin_token', action.payload.token);
+                }
+            })
+            .addCase(loginAdmin.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload;
+            })
+            .addCase(initAdmin.pending, (state) => {
+                state.loading = true;
+            })
+            .addCase(initAdmin.fulfilled, (state, action) => {
+                state.loading = false;
                 state.admin = action.payload;
                 localStorage.setItem('admin_user', JSON.stringify(action.payload));
             })
-            .addCase(loginAdmin.rejected, (state, action) => {
+            .addCase(initAdmin.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             });
