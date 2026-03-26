@@ -12,9 +12,13 @@ import reportRoutes from './routes/reportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import marketplaceRoutes from './routes/marketplaceRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import escalationRoutes from './routes/escalationRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import workerRoutes from './routes/workerRoutes.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
+const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = [
   process.env.USER_APP_URL,
   process.env.ADMIN_APP_URL,
@@ -22,6 +26,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
+  'http://localhost:5176',
 ].filter(Boolean);
 
 // ── Security & parsing ──────────────────────────────────────
@@ -31,9 +36,11 @@ app.use(express.json());
 // ── Rate limiting ───────────────────────────────────────────
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: isProduction ? 600 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  message: { error: 'Too many API requests. Please wait and retry.' },
 });
 app.use('/api/', generalLimiter);
 
@@ -58,10 +65,20 @@ app.use('/api/issues', reportRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/escalations', escalationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/workers', workerRoutes);
+app.get('/api/reports', (_req, res) => {
+  res.json({ reports: [] });
+});
 
 // ── Global error handler ────────────────────────────────────
 app.use((err, _req, res, _next) => {
-  console.error('[Unhandled Error]', err?.message || err);
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[Error]', err);
+  } else {
+    console.error('[Error]', err?.message);
+  }
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'Image too large. Maximum size is 5MB.' });
   }

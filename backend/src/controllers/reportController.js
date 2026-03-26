@@ -3,13 +3,15 @@ import { supabaseAdmin } from '../config/supabase.js';
 
 export async function createIssue(req, res) {
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     const { description, location_lat, location_lng, location_address, bin_id } = req.body;
     const photoBuckets = ['issue-photos', 'issue-audio'];
-    const audioBuckets = ['issue-audio', 'issue-photos'];
     
     // Default handles for uploaded files
     let photoUrl = null;
-    let audioUrl = null;
 
     if (req.files) {
       if (req.files.photo && req.files.photo[0]) {
@@ -36,29 +38,6 @@ export async function createIssue(req, res) {
         }
       }
 
-      if (req.files.audio_file && req.files.audio_file[0]) {
-        try {
-          const file = req.files.audio_file[0];
-          const ext = file.originalname.split('.').pop() || 'webm';
-          const fileName = `audio-${Date.now()}.${ext}`;
-          for (const bucket of audioBuckets) {
-            const { data, error } = await supabaseAdmin.storage
-              .from(bucket)
-              .upload(fileName, file.buffer, { contentType: file.mimetype });
-            if (!error && data) {
-              audioUrl = supabaseAdmin.storage
-                .from(bucket)
-                .getPublicUrl(fileName).data.publicUrl;
-              break;
-            }
-            if (error) {
-              console.warn(`[createIssue] Audio upload failed for bucket ${bucket}:`, error.message);
-            }
-          }
-        } catch (storageErr) {
-          console.warn('[createIssue] Audio upload failed, continuing without audio:', storageErr.message);
-        }
-      }
     }
 
     // Insert into DB
@@ -69,9 +48,8 @@ export async function createIssue(req, res) {
         location_address: location_address || '',
         bin_id: bin_id || null,
         photo_url: photoUrl,
-        audio_url: audioUrl,
         status: 'open',
-        user_id: req.user?.id || null,
+        user_id: req.user.id,
     };
     
     // Clean nulls to prevent constraint errors if column isn't strictly nullable
@@ -115,5 +93,32 @@ export async function getIssues(req, res) {
     res.json({ issues: data });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch issues' });
+  }
+}
+
+export async function updateIssue(req, res) {
+  try {
+    const updates = {};
+    const allowed = ['status', 'rejection_reason', 'created_task_id'];
+    for (const key of allowed) {
+      if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (req.admin?.id) {
+      updates.reviewed_by = req.admin.id;
+    }
+    updates.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('issue_reports')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to update issue' });
   }
 }

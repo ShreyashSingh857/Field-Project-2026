@@ -5,15 +5,16 @@ import {
   listRecyclingCenters, createRecyclingCenter,
   updateRecyclingCenter, deleteRecyclingCenter,
 } from '../controllers/binsController.js';
-import { verifyAdminKey } from '../middleware/verifyAdminKey.js';
+import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
+import { requireRole } from '../middleware/requireRole.js';
 
 const router = Router();
 
 // ── Smart Bins ─────────────────────────────────────────────────────────────
 router.get('/', listBins);
 router.get('/:id', getBin);
-router.post('/', verifyAdminKey, createBin);         // admin
-router.patch('/:id', verifyAdminKey, updateBin);     // admin
-router.delete('/:id', verifyAdminKey, deleteBin);    // admin
+router.post('/', verifyAdminJWT, requireRole('panchayat_admin'), createBin);
+router.patch('/:id', verifyAdminJWT, requireRole('panchayat_admin'), updateBin);
+router.delete('/:id', verifyAdminJWT, requireRole('panchayat_admin'), deleteBin);
 
 export default router;

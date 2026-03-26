@@ -101,8 +101,23 @@ function Reports() {
 
     const handleExportCSV = () => {
         try {
-            showToast('Export started - CSV file will download', 'success');
-            // Would implement actual CSV export here
+            const rows = [['section', 'name', 'value1', 'value2', 'value3']];
+            taskCompletionData.forEach((r) => rows.push(['task_completion', r.day, r.completed, r.pending, '']));
+            workerPerformanceData.forEach((r) => rows.push(['worker_performance', r.name, r.assigned, r.completed, r.rate]));
+            issueStatusData.forEach((r) => rows.push(['issue_status', r.name, r.value, '', '']));
+            panchayatPerformance.forEach((r) => rows.push(['panchayat_performance', r.name, r.total_tasks, r.completed, r.sla_compliance]));
+
+            const csv = rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `admin-report-${Date.now()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            showToast('Report exported successfully', 'success');
         } catch (err) {
             showToast('Failed to export CSV', 'error');
         }
@@ -193,9 +208,7 @@ function Reports() {
                                 <YAxis />
                                 <Tooltip />
                                 <Legend />
-                                <Line type="monotone" dataKey="bin1" stroke="var(--admin-primary)" name="Bin 1" />
-                                <Line type="monotone" dataKey="bin2" stroke="#FFA500" name="Bin 2" />
-                                <Line type="monotone" dataKey="bin3" stroke="#A32D2D" name="Bin 3" />
+                                <Line type="monotone" dataKey="averageFill" stroke="var(--admin-primary)" name="Average Fill %" />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>

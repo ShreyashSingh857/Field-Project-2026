@@ -84,10 +84,10 @@ export async function completeTaskById({ taskId, workerId, proofPhotoUrl }) {
 export async function insertTaskStatusLog({ taskId, previousStatus, nextStatus, changedBy }) {
 	const { error } = await supabaseAdmin.from('task_status_log').insert({
 		task_id: taskId,
-		previous_status: previousStatus,
+		old_status: previousStatus,
 		new_status: nextStatus,
-		changed_by: changedBy,
-		created_at: new Date().toISOString(),
+		changed_by_worker: changedBy,
+		changed_at: new Date().toISOString(),
 	});
 
 	if (error) {

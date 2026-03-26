@@ -7,12 +7,12 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading, error } = useSelector((state) => state.auth);
-  const [email, setEmail] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    const result = await dispatch(login({ email, password }));
+    const result = await dispatch(login({ employee_id: employeeId, password }));
     if (!result.error) {
       navigate('/');
     }
@@ -22,13 +22,13 @@ const Login = () => {
     <div className="min-h-screen bg-[var(--sm-bg)] flex items-center justify-center px-4">
       <form onSubmit={onSubmit} className="bg-white w-full max-w-sm rounded-xl p-5 shadow-sm border border-gray-100">
         <h1 className="text-xl font-bold text-[var(--sm-primary)] mb-1">Safai Mitra Login</h1>
-        <p className="text-xs text-gray-500 mb-4">Sign in with your Supabase worker account</p>
+        <p className="text-xs text-gray-500 mb-4">Sign in with your worker ID and password</p>
 
-        <label className="block text-sm font-medium mb-1">Email</label>
+        <label className="block text-sm font-medium mb-1">Employee ID</label>
         <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          value={employeeId}
+          onChange={(e) => setEmployeeId(e.target.value)}
           required
           className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3"
         />
