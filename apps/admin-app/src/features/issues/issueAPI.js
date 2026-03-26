@@ -5,9 +5,22 @@ export async function fetchIssues(filters = {}) {
   return data?.issues || [];
 }
 
-export async function convertIssueToTask(issueId, taskData) {
-  const created = await api.post('/tasks', { ...taskData, source_issue_id: issueId });
-  await api.patch(`/issues/${issueId}`, { status: 'assigned', created_task_id: created.data?.id });
+export async function convertIssueToTask(issue, taskData) {
+  const created = await api.post('/tasks', {
+    source_issue_id: issue.id,
+    type: taskData.type,
+    priority: taskData.priority,
+    assigned_worker_id: taskData.assigned_worker_id || null,
+    due_at: taskData.due_at,
+    title: issue.description?.slice(0, 120) || 'Issue Resolution Task',
+    description: issue.description || 'Auto-created from issue',
+    location_lat: issue.location_lat,
+    location_lng: issue.location_lng,
+    location_address: issue.location_address || 'N/A',
+    village_id: issue.village_id || null,
+    bin_id: issue.bin_id || null,
+  });
+  await api.patch(`/issues/${issue.id}`, { status: 'assigned', created_task_id: created.data?.id });
   return created.data;
 }
 
