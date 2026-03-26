@@ -54,7 +54,7 @@ export async function createIssue(req, res) {
     if (!insertData.location_lng) delete insertData.location_lng;
 
     const { data, error } = await supabaseAdmin
-      .from('issues')
+      .from('issue_reports')
       .insert(insertData)
       .select()
       .single();
@@ -74,7 +74,7 @@ export async function createIssue(req, res) {
 export async function getIssues(req, res) {
   try {
     const { mine } = req.query;
-    let query = supabaseAdmin.from('issues').select('*').order('created_at', { ascending: false });
+    let query = supabaseAdmin.from('issue_reports').select('*').order('created_at', { ascending: false });
     
     if (mine === 'true' && req.user?.id) {
       query = query.eq('user_id', req.user.id);
