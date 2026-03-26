@@ -1,7 +1,11 @@
 import api from '../../services/axiosInstance';
 
-export const getListings = (villageId) => {
-	const path = villageId ? `/marketplace?village_id=${villageId}` : '/marketplace';
+export const getListings = (filters = {}) => {
+	const params = new URLSearchParams();
+	if (filters.villageId) params.set('village_id', filters.villageId);
+	if (filters.mineOnly) params.set('mine', 'true');
+	const query = params.toString();
+	const path = query ? `/marketplace?${query}` : '/marketplace';
 	return api.get(path).then((r) => r.data.listings || []);
 };
 

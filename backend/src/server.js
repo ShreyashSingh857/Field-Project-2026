@@ -2,12 +2,15 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
-import { supabase } from './config/supabaseClient.js';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import binsRoutes from './routes/binsRoutes.js';
 import recyclingRoutes from './routes/recyclingRoutes.js';
 import aiRoute from './routes/aiRoute.js';
+import reportRoutes from './routes/reportRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
+import marketplaceRoutes from './routes/marketplaceRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -42,6 +45,10 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/ai/speech', aiRoute);
 app.use('/api/bins', binsRoutes);
 app.use('/api/recycling-centers', recyclingRoutes);
+app.use('/api/issues', reportRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/users', userRoutes);
 
 // ── Global error handler ────────────────────────────────────
 app.use((err, _req, res, _next) => {
