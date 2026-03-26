@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import BottomNav from '../components/BottomNav';
 import { useTranslation } from 'react-i18next';
+import { logout } from '../features/auth/authSlice';
 
 const Profile = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { worker } = useSelector((s) => s.auth);
   const [lang, setLang] = useState(i18n.language || 'en');
 
   const handleLanguageChange = (newLang) => {
@@ -13,8 +17,8 @@ const Profile = () => {
     i18n.changeLanguage(newLang);
   };
 
-  const handleLogout = () => {
-    // mock logout
+  const handleLogout = async () => {
+    await dispatch(logout());
     navigate('/login');
   };
 
@@ -33,17 +37,17 @@ const Profile = () => {
           <div className="w-20 h-20 rounded-full bg-[var(--sm-primary)] text-white text-3xl font-bold flex items-center justify-center mx-auto mb-3 shadow-md">
             RK
           </div>
-          <h2 className="text-[20px] font-bold text-[var(--sm-text)] m-0">Ramesh Kumar</h2>
-          <p className="text-[14px] text-[var(--sm-text-muted)] font-mono mt-1">EMP-80492</p>
+          <h2 className="text-[20px] font-bold text-[var(--sm-text)] m-0">{worker?.name || 'Worker'}</h2>
+          <p className="text-[14px] text-[var(--sm-text-muted)] font-mono mt-1">{worker?.employee_id || 'N/A'}</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-left">
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
               <p className="text-[11px] text-[var(--sm-text-muted)] uppercase font-semibold mb-1">Assigned Area</p>
-              <p className="text-[14px] font-semibold text-[var(--sm-text)]">South Village Sector</p>
+              <p className="text-[14px] font-semibold text-[var(--sm-text)]">{worker?.assigned_area || 'Not assigned'}</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
               <p className="text-[11px] text-[var(--sm-text-muted)] uppercase font-semibold mb-1">Phone</p>
-              <p className="text-[14px] font-semibold text-[var(--sm-text)]">+91 98765 43210</p>
+              <p className="text-[14px] font-semibold text-[var(--sm-text)]">{worker?.phone || 'Not provided'}</p>
             </div>
           </div>
         </div>

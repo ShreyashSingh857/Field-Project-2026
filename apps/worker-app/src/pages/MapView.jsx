@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle } from 'react-leaflet';
 import L from 'leaflet';
+import { useDispatch, useSelector } from 'react-redux';
 import Navbar from '../components/Navbar';
 import BottomNav from '../components/BottomNav';
 import { useNavigate } from 'react-router-dom';
+import { loadTasks } from '../features/tasks/taskSlice';
 
 // Fix Leaflet's default icon issue in React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -28,23 +30,33 @@ const iconWorker = new L.DivIcon({
   iconAnchor: [8, 8]
 });
 
-// Mock mapping data
-const mockBins = [
-  { id: 't1', name: 'Main Square Bin', fill: 95, coords: [19.0760, 72.8777], status: 'pending' },
-  { id: 't2', name: 'Market Line 2', fill: 80, coords: [19.0780, 72.8790], status: 'pending' },
-  { id: 't3', name: 'School Road Bin', fill: 55, coords: [19.0740, 72.8760], status: 'in_progress' },
-  { id: 't4', name: 'River Side Bin', fill: 10, coords: [19.0720, 72.8780], status: 'completed' },
-];
-
 const workerCoords = [19.0750, 72.8750];
-
-// Basic route optimization (mocked sequentially)
-const routeCoords = [workerCoords, ...mockBins.filter(b => b.status !== 'completed').map(b => b.coords)];
 
 const MapView = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { worker } = useSelector((s) => s.auth);
+  const { items: tasks } = useSelector((s) => s.tasks);
   const [lang, setLang] = useState('en');
+
+  useEffect(() => {
+    if (worker?.id) {
+      dispatch(loadTasks({ workerId: worker.id, villageId: worker.village_id }));
+    }
+  }, [dispatch, worker?.id]);
+
+  const liveBins = tasks
+    .filter((t) => t.bin?.location_lat && t.bin?.location_lng)
+    .map((t) => ({
+      id: t.id,
+      name: t.bin?.label || t.title,
+      fill: t.bin?.fill_level ?? 0,
+      coords: [t.bin.location_lat, t.bin.location_lng],
+      status: t.status,
+    }));
+
+  const routeCoords = [workerCoords, ...liveBins.filter((b) => b.status !== 'done').map((b) => b.coords)];
   
   const toggleLang = () => {
     setLang(lang === 'en' ? 'hi' : lang === 'hi' ? 'mr' : 'en');
@@ -59,8 +71,8 @@ const MapView = () => {
   return (
     <div className="bg-[var(--sm-bg)] min-h-screen flex flex-col">
       <Navbar 
-        workerName="Ramesh Kumar" 
-        area="South Village Sector" 
+        workerName={worker?.name || 'Worker'} 
+        area={worker?.assigned_area || 'Not assigned'} 
         onLanguageToggle={toggleLang} 
         lang={lang} 
       />
@@ -91,7 +103,7 @@ const MapView = () => {
             <Popup>You are here</Popup>
           </Marker>
 
-          {mockBins.map(bin => (
+          {liveBins.map(bin => (
             <Marker key={bin.id} position={bin.coords} icon={getIcon(bin.fill)}>
               <Popup>
                 <div className="text-center">

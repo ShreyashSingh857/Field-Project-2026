@@ -5,14 +5,14 @@
    ───────────────────────────────────────────── */
 
 :root {
-  --clay-bg:        #E8F5E9;
-  --clay-card:      #C8E6C9;
+  --clay-bg:        #c0e7c3;
+  --clay-card:      #64a767;
   --clay-card-alt:  #DCEDC8;
   --clay-primary:   #2E7D32;
   --clay-secondary: #4CAF50;
   --clay-accent:    #1B5E20;
   --clay-text:      #1A1A1A;
-  --clay-muted:     #2E7D32;
+  --clay-muted:     #023e05;
 
   /* Raised clay shadow: outer drop + inner highlight */
   --clay-shadow:

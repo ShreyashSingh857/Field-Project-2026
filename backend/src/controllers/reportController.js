@@ -3,13 +3,15 @@ import { supabaseAdmin } from '../config/supabase.js';
 
 export async function createIssue(req, res) {
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     const { description, location_lat, location_lng, location_address, bin_id } = req.body;
     const photoBuckets = ['issue-photos', 'issue-audio'];
-    const audioBuckets = ['issue-audio', 'issue-photos'];
     
     // Default handles for uploaded files
     let photoUrl = null;
-    let audioUrl = null;
 
     if (req.files) {
       if (req.files.photo && req.files.photo[0]) {
@@ -36,29 +38,6 @@ export async function createIssue(req, res) {
         }
       }
 
-      if (req.files.audio_file && req.files.audio_file[0]) {
-        try {
-          const file = req.files.audio_file[0];
-          const ext = file.originalname.split('.').pop() || 'webm';
-          const fileName = `audio-${Date.now()}.${ext}`;
-          for (const bucket of audioBuckets) {
-            const { data, error } = await supabaseAdmin.storage
-              .from(bucket)
-              .upload(fileName, file.buffer, { contentType: file.mimetype });
-            if (!error && data) {
-              audioUrl = supabaseAdmin.storage
-                .from(bucket)
-                .getPublicUrl(fileName).data.publicUrl;
-              break;
-            }
-            if (error) {
-              console.warn(`[createIssue] Audio upload failed for bucket ${bucket}:`, error.message);
-            }
-          }
-        } catch (storageErr) {
-          console.warn('[createIssue] Audio upload failed, continuing without audio:', storageErr.message);
-        }
-      }
     }
 
     // Insert into DB
@@ -69,9 +48,8 @@ export async function createIssue(req, res) {
         location_address: location_address || '',
         bin_id: bin_id || null,
         photo_url: photoUrl,
-        audio_url: audioUrl,
         status: 'open',
-        user_id: req.user?.id || null,
+        user_id: req.user.id,
     };
     
     // Clean nulls to prevent constraint errors if column isn't strictly nullable

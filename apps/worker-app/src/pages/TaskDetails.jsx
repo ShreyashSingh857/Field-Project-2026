@@ -1,27 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-
-const mockTaskDetails = {
-  t1: {
-    id: 't1',
-    binId: 'BIN-104',
-    binName: 'Main Square Bin',
-    fillLevel: 95,
-    location: 'Near Panchayat Office, Sector 4',
-    slaCountdown: '15 mins left',
-    status: 'pending',
-    areaType: 'Market Area',
-    populationDensity: 'High Density',
-    timeSince80: '2 hours ago'
-  }
-};
+import { useDispatch, useSelector } from 'react-redux';
+import { completeTask, loadTaskDetails, startTask } from '../features/tasks/taskSlice';
 
 const TaskDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const task = mockTaskDetails[id] || mockTaskDetails['t1'];
+  const dispatch = useDispatch();
+  const { selectedTask: task, loading, error } = useSelector((s) => s.tasks);
+  useEffect(() => { if (id) dispatch(loadTaskDetails(id)); }, [dispatch, id]);
 
   const [qrScanned, setQrScanned] = useState(false);
   const [beforePhoto, setBeforePhoto] = useState(false);
@@ -30,10 +19,12 @@ const TaskDetails = () => {
   const [voiceNote, setVoiceNote] = useState(null);
 
   const canComplete = qrScanned && beforePhoto && afterPhoto;
+  const fillLevel = task.fill_level ?? task.bin?.fill_level ?? 0;
+  const dueAt = task.due_at ? new Date(task.due_at).toLocaleString() : 'N/A';
 
   const handleComplete = () => {
     if (canComplete) {
-      alert("Task Completed Successfully!");
+      dispatch(completeTask({ taskId: id, proofPhotoUrl: null }));
       navigate('/');
     }
   };
@@ -54,6 +45,9 @@ const TaskDetails = () => {
     return '#639922';
   };
 
+  if (loading || !task) return <div className="p-4 text-sm">Loading...</div>;
+  if (error) return <div className="p-4 text-sm text-red-600">{error}</div>;
+
   return (
     <div className="bg-[var(--sm-bg)] min-h-screen pb-[120px]">
       <div className="sm-topbar">
@@ -70,17 +64,17 @@ const TaskDetails = () => {
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h2 className="text-[18px] font-bold text-[var(--sm-text)] mb-1">{task.binName}</h2>
+              <h2 className="text-[18px] font-bold text-[var(--sm-text)] mb-1">{task.bin?.label || task.title}</h2>
               <div className="text-[13px] text-[var(--sm-text-muted)] flex items-center gap-1">
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                {task.location}
+                {task.location_address}
               </div>
             </div>
             <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-[12px] font-bold">
-              {task.binId}
+              {task.bin?.id}
             </span>
           </div>
 
@@ -88,26 +82,26 @@ const TaskDetails = () => {
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="bg-gray-50 rounded p-2 border border-gray-100">
                 <div className="text-[10px] text-[var(--sm-text-muted)] uppercase tracking-wide">Area Type</div>
-                <div className="text-[12px] font-semibold">{task.areaType}</div>
+                <div className="text-[12px] font-semibold">{task.status}</div>
               </div>
               <div className="bg-gray-50 rounded p-2 border border-gray-100">
                 <div className="text-[10px] text-[var(--sm-text-muted)] uppercase tracking-wide">Density</div>
-                <div className="text-[12px] font-semibold">{task.populationDensity}</div>
+                <div className="text-[12px] font-semibold">{dueAt}</div>
               </div>
             </div>
 
             <div className="flex justify-between text-[13px] font-medium mb-2">
               <span>{t('fillLevel')}</span>
-              <span style={{ color: getFillColor(task.fillLevel) }} className="font-bold">{task.fillLevel}%</span>
+              <span style={{ color: getFillColor(fillLevel) }} className="font-bold">{fillLevel}%</span>
             </div>
             <div className="fill-bar-bg h-2.5">
               <div
                 className="fill-bar-progress"
-                style={{ width: `${task.fillLevel}%`, backgroundColor: getFillColor(task.fillLevel) }}
+                style={{ width: `${fillLevel}%`, backgroundColor: getFillColor(fillLevel) }}
               ></div>
             </div>
             <div className="text-right text-[11px] text-[var(--sm-text-muted)] mt-1">
-              Reached 80% {task.timeSince80}
+              Reached 80% {task.status}
             </div>
           </div>
 
@@ -116,7 +110,7 @@ const TaskDetails = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div className="text-[13px] font-semibold text-red-700">
-              SLA Goal: <span className="font-bold">{task.slaCountdown}</span>
+              SLA Goal: <span className="font-bold">{dueAt}</span>
             </div>
           </div>
         </div>
@@ -126,7 +120,7 @@ const TaskDetails = () => {
         
         <div className="flex flex-col gap-3 mb-6">
           {/* Action 1: QR Scan */}
-          <button onClick={() => setQrScanned(true)} className={`flex items-center justify-between p-4 rounded-xl border ${qrScanned ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+          <button onClick={() => { setQrScanned(true); dispatch(startTask(id)); }} className={`flex items-center justify-between p-4 rounded-xl border ${qrScanned ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${qrScanned ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
