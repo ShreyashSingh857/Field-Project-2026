@@ -47,9 +47,14 @@ export const startTask = createAsyncThunk('tasks/startTask', async (taskId, { re
 
 export const completeTask = createAsyncThunk(
   'tasks/completeTask',
-  async ({ taskId, proofPhotoUrl }, { rejectWithValue }) => {
+  async ({ taskId, proofPhotoUrl, beforePhotoFile, afterPhotoFile, proofPhotoFile }, { rejectWithValue }) => {
     try {
-      return await completeTaskRequest(taskId, { proof_photo_url: proofPhotoUrl });
+      return await completeTaskRequest(taskId, {
+        proof_photo_url: proofPhotoUrl,
+        beforePhotoFile,
+        afterPhotoFile,
+        proofPhotoFile,
+      });
     } catch (err) {
       return rejectWithValue(err.response?.data?.error || err.message || 'Failed to complete task');
     }

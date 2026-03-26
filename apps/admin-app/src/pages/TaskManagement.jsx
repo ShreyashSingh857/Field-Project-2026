@@ -31,6 +31,21 @@ function TaskManagement() {
     const [filter, setFilter] = useState('all');
     const [showProofModal, setShowProofModal] = useState(null);
 
+    const parseProof = (proof) => {
+        if (!proof) return { before: null, after: null, single: null };
+        if (typeof proof === 'string' && proof.trim().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(proof);
+                return {
+                    before: parsed.before_photo_url || null,
+                    after: parsed.after_photo_url || null,
+                    single: parsed.proof_photo_url || null,
+                };
+            } catch (_e) {}
+        }
+        return { before: null, after: null, single: proof };
+    };
+
     const [formData, setFormData] = useState({
         title: '',
         type: 'bin_clean',
@@ -314,13 +329,16 @@ function TaskManagement() {
                             </button>
                         </div>
                         <div className="admin-modal-body">
-                            {(showProofModal.proof_photo_url || showProofModal.proofUrl) && (
-                                <img
-                                    src={showProofModal.proof_photo_url || showProofModal.proofUrl}
-                                    alt="Task proof"
-                                    style={{ width: '100%', borderRadius: '8px', marginBottom: '16px' }}
-                                />
-                            )}
+                            {(() => {
+                                const proof = parseProof(showProofModal.proof_photo_url || showProofModal.proofUrl);
+                                return (
+                                    <>
+                                        {proof.before && <img src={proof.before} alt="Before proof" style={{ width: '100%', borderRadius: '8px', marginBottom: '10px' }} />}
+                                        {proof.after && <img src={proof.after} alt="After proof" style={{ width: '100%', borderRadius: '8px', marginBottom: '10px' }} />}
+                                        {!proof.before && !proof.after && proof.single && <img src={proof.single} alt="Task proof" style={{ width: '100%', borderRadius: '8px', marginBottom: '16px' }} />}
+                                    </>
+                                );
+                            })()}
                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
                                 <div>
                                     <strong>Completed:</strong> {showProofModal.completed_at
