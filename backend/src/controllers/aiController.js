@@ -10,6 +10,23 @@ const openai = new OpenAI({
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const LANGUAGE_NAME = {
+  en: 'English',
+  hi: 'Hindi',
+  mr: 'Marathi',
+};
+
+const WASTE_KEYWORDS = [
+  'waste', 'garbage', 'trash', 'recycle', 'recycling', 'compost', 'bin', 'litter', 'plastic',
+  'wet waste', 'dry waste', 'hazardous', 'sanitation', 'cleanliness', 'segregation', 'landfill',
+  'kachra', 'kachara', 'safai', 'swachh', 'geela', 'sukha', 'olya', 'suka', 'kachrya',
+];
+
+function isWasteRelated(text = '') {
+  const normalized = String(text).toLowerCase();
+  return WASTE_KEYWORDS.some((k) => normalized.includes(k));
+}
+
 export const transcribeAudio = async (req, res) => {
   try {
     if (!req.file) {
@@ -54,20 +71,39 @@ export const chatWithAssistant = async (req, res) => {
       return res.status(400).json({ error: 'message is required' });
     }
 
+    const selectedLanguage = LANGUAGE_NAME[language] ? language : 'en';
+    const latestMessage = String(message).trim();
+
+    const wasteRelated = isWasteRelated(latestMessage);
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: `You are a helpful waste management assistant for rural villages in India. Answer questions about waste disposal, recycling, composting, and sanitation in simple, friendly language. Keep answers concise and practical. Always respond in ${language === 'hi' ? 'Hindi' : language === 'mr' ? 'Marathi' : 'English'}.`,
+      model: 'gemini-2.5-flash',
+      systemInstruction: `You are a waste-management assistant for rural India.
+    Primary focus is waste disposal, recycling, composting, sanitation, bins, litter, and cleanliness drives.
+    You may answer greetings and simple general questions naturally.
+    If a question is outside waste management, give a short helpful answer and gently steer the user back to waste-management help.
+Keep responses practical, concise, and village-friendly with simple steps.
+Always respond in ${LANGUAGE_NAME[selectedLanguage]}.`,
     });
 
-    // Convert history to Gemini format
-    const chatHistory = history.map(m => ({
+    // Convert recent history to Gemini format
+    const chatHistory = history.slice(-10).map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
 
     const chat = model.startChat({ history: chatHistory });
-    const result = await chat.sendMessage(message);
-    const reply = result.response.text();
+    const result = await chat.sendMessage(latestMessage);
+    let reply = result.response.text();
+
+    if (!wasteRelated) {
+      const suffix = selectedLanguage === 'hi'
+        ? '\n\nअगर आप चाहें, तो मैं कचरा अलग करने, रीसाइक्लिंग या स्वच्छता से जुड़े सवालों में भी मदद कर सकता हूं।'
+        : selectedLanguage === 'mr'
+          ? '\n\nतुम्हाला हवे असल्यास मी कचरा वर्गीकरण, पुनर्वापर किंवा स्वच्छतेबाबतही मदत करू शकतो.'
+          : '\n\nIf you want, I can also help with waste segregation, recycling, or sanitation.';
+      reply = `${reply}${suffix}`;
+    }
 
     res.json({ reply });
   } catch (err) {
