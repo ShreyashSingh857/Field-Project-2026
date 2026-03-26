@@ -1,23 +1,25 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { loginAdminAPI } from './authAPI';
 
+const getInitialAdmin = () => {
+    try {
+        const stored = JSON.parse(localStorage.getItem('admin_user'));
+        if (stored && typeof stored.id === 'string' && stored.id.length === 36) {
+            return stored;
+        }
+        if (stored) {
+            localStorage.removeItem('admin_user');
+        }
+    } catch (e) {
+        // ignore parse errors
+    }
+    return null;
+};
+
 export const loginAdmin = createAsyncThunk(
     'auth/login',
     async ({ email, password }, { rejectWithValue }) => {
         try {
-            // Demo credentials for development/testing
-            if (email === 'demo@gramwaste.local' && password === 'Demo@123456') {
-                const mockAdmin = {
-                    id: 'admin-001',
-                    name: 'Demo Admin',
-                    email: 'demo@gramwaste.local',
-                    role: 'panchayat_admin',
-                    jurisdiction_name: 'Gokul Nagar',
-                };
-                localStorage.setItem('admin_user', JSON.stringify(mockAdmin));
-                return mockAdmin;
-            }
-
             return await loginAdminAPI(email, password);
         } catch (err) {
             return rejectWithValue(err.message);
@@ -28,7 +30,7 @@ export const loginAdmin = createAsyncThunk(
 const authSlice = createSlice({
     name: 'auth',
     initialState: {
-        admin: JSON.parse(localStorage.getItem('admin_user')) || null,
+        admin: getInitialAdmin(),
         loading: false,
         error: null,
     },

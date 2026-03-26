@@ -1,56 +1,31 @@
 import supabase from "../../services/supabaseClient";
 
 /**
- * Fetch all announcements with optional filtering
- * @param {string} adminId - Admin ID
- * @param {string} scope - Admin's jurisdiction scope
- * @param {Object} filters - Optional filters (status, is_pinned, created_by)
+ * Fetch all active announcements
+ * @param {Object} filters - Optional filters (is_pinned, target_village_id)
  * @returns {Promise<Array>} List of announcements
  */
-export const fetchAnnouncements = async (adminId, scope, filters = {}) => {
+export const fetchAnnouncements = async (filters = {}) => {
     try {
-        let query = supabase.from("announcements").select(
-            `id,
-       announcement_id,
-       title,
-       content,
-       image_url,
-       category,
-       priority,
-       status,
-       is_pinned,
-       view_count,
-       created_by,
-       created_at,
-       updated_at,
-       expires_at,
-       target_role,
-       target_audience,
-       admin:admins(id, name, email, role)`
-        );
+        let query = supabase
+            .from("announcements")
+            .select(
+                "id, title, content, target_village_id, is_pinned, is_active, " +
+                "created_at, updated_at, creator:admins(id, name, role)"
+            )
+            .eq("is_active", true);
 
-        // Apply scope filtering
-        if (scope && scope !== "national") {
-            query = query.eq("jurisdiction_scope", scope);
-        }
-
-        // Apply provided filters
-        if (filters.status) {
-            query = query.eq("status", filters.status);
-        }
+        // Apply filters
         if (filters.is_pinned !== undefined) {
             query = query.eq("is_pinned", filters.is_pinned);
         }
-        if (filters.created_by) {
-            query = query.eq("created_by", filters.created_by);
-        }
-        if (filters.category) {
-            query = query.eq("category", filters.category);
+        if (filters.target_village_id) {
+            query = query.or(`target_village_id.eq.${filters.target_village_id},target_village_id.is.null`);
         }
 
-        const { data, error } = await query.order("is_pinned", {
-            ascending: false,
-        }).order("created_at", { ascending: false });
+        const { data, error } = await query
+            .order("is_pinned", { ascending: false })
+            .order("created_at", { ascending: false });
 
         if (error) throw error;
         return data || [];
@@ -62,47 +37,24 @@ export const fetchAnnouncements = async (adminId, scope, filters = {}) => {
 
 /**
  * Create a new announcement
- * @param {Object} announcementData - Announcement details
+ * @param {Object} announcementData - Announcement details: {title, content, target_village_id}
  * @param {string} adminId - Creating admin ID
  * @returns {Promise<Object>} Created announcement
  */
 export const createAnnouncement = async (announcementData, adminId) => {
     try {
-        // Generate announcement ID
-        const { data: lastAnnouncement } = await supabase
-            .from("announcements")
-            .select("announcement_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-        let nextNumber = 1;
-        if (lastAnnouncement && lastAnnouncement.length > 0) {
-            const match = lastAnnouncement[0].announcement_id.match(/ANN-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
-        }
-
-        const announcementId = `ANN-${String(nextNumber).padStart(5, "0")}`;
-
         const { data, error } = await supabase
             .from("announcements")
             .insert([
                 {
-                    announcement_id: announcementId,
                     title: announcementData.title,
                     content: announcementData.content,
-                    image_url: announcementData.image_url || null,
-                    category: announcementData.category || "general",
-                    priority: announcementData.priority || "normal",
-                    status: "published",
+                    target_village_id: announcementData.target_village_id || null, // NULL = broadcast to all
                     is_pinned: announcementData.is_pinned || false,
-                    target_role: announcementData.target_role || "all", // all, admin, worker
-                    target_audience: announcementData.target_audience || "all",
+                    is_active: true,
                     created_by: adminId,
                     created_at: new Date().toISOString(),
-                    expires_at: announcementData.expires_at || null,
-                    view_count: 0,
+                    updated_at: new Date().toISOString(),
                 },
             ])
             .select()
@@ -117,18 +69,18 @@ export const createAnnouncement = async (announcementData, adminId) => {
 };
 
 /**
- * Delete an announcement
+ * Delete/deactivate an announcement
  * @param {string} announcementId - Announcement ID
  * @returns {Promise<Object>} Deletion confirmation
  */
 export const deleteAnnouncement = async (announcementId) => {
     try {
-        // Soft delete - mark as deleted instead of removing
+        // Soft delete - mark as inactive instead of removing
         const { data, error } = await supabase
             .from("announcements")
             .update({
-                status: "deleted",
-                deleted_at: new Date().toISOString(),
+                is_active: false,
+                updated_at: new Date().toISOString(),
             })
             .eq("id", announcementId)
             .select()
@@ -139,7 +91,6 @@ export const deleteAnnouncement = async (announcementId) => {
         return {
             success: true,
             message: "Announcement deleted successfully",
-            announcement_id: data.id,
         };
     } catch (error) {
         console.error("Error deleting announcement:", error);

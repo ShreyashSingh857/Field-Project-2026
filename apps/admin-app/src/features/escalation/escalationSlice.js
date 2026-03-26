@@ -1,7 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
-    fetchEscalations,
-    createEscalation,
     markResolved,
     reassignWorker,
     updateEscalationStatus,
@@ -10,28 +8,6 @@ import {
 } from './escalationAPI';
 
 // Async Thunks
-export const fetchEscalationsThunk = createAsyncThunk(
-    'escalations/fetchEscalations',
-    async ({ adminId, scope, filters }, { rejectWithValue }) => {
-        try {
-            return await fetchEscalations(adminId, scope, filters);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
-export const createEscalationThunk = createAsyncThunk(
-    'escalations/createEscalation',
-    async ({ escalationData, adminId }, { rejectWithValue }) => {
-        try {
-            return await createEscalation(escalationData, adminId);
-        } catch (err) {
-            return rejectWithValue(err.message);
-        }
-    }
-);
-
 export const markResolvedThunk = createAsyncThunk(
     'escalations/markResolved',
     async ({ escalationId, resolutionNotes }, { rejectWithValue }) => {
@@ -108,36 +84,6 @@ const escalationSlice = createSlice({
         },
     },
     extraReducers: (builder) => {
-        // Fetch Escalations
-        builder
-            .addCase(fetchEscalationsThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(fetchEscalationsThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list = action.payload;
-            })
-            .addCase(fetchEscalationsThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
-        // Create Escalation
-        builder
-            .addCase(createEscalationThunk.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(createEscalationThunk.fulfilled, (state, action) => {
-                state.loading = false;
-                state.list.push(action.payload);
-            })
-            .addCase(createEscalationThunk.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            });
-
         // Mark Resolved
         builder
             .addCase(markResolvedThunk.pending, (state) => {
