@@ -76,7 +76,7 @@ export const fetchSubAdmins = async (adminId, adminRole) => {
 
 /**
  * Create a new sub-admin
- * @param {Object} subAdminData - Sub-admin details
+ * @param {Object} subAdminData - Sub-admin details: {name, email, role, jurisdiction_name}
  * @param {string} parentAdminId - Parent admin ID
  * @param {string} parentAdminRole - Parent admin's role
  * @returns {Promise<Object>} Created sub-admin with temp password
@@ -101,14 +101,6 @@ export const createSubAdmin = async (
             .toUpperCase();
         const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-        // Validate jurisdiction hierarchy
-        const jurisdictionMap = {
-            zilla_parishad: "zilla",
-            block_samiti: "block",
-            gram_panchayat: "gram_panchayat",
-            panchayat_admin: "panchayat",
-        };
-
         const { data, error } = await supabase
             .from("admins")
             .insert([
@@ -118,11 +110,11 @@ export const createSubAdmin = async (
                     password_hash: passwordHash,
                     role: subAdminData.role,
                     jurisdiction_name: subAdminData.jurisdiction_name,
-                    jurisdiction_id: subAdminData.jurisdiction_id,
-                    jurisdiction_type: jurisdictionMap[subAdminData.role],
                     parent_admin_id: parentAdminId,
                     is_active: true,
+                    created_by: parentAdminId,
                     created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                 },
             ])
             .select()
@@ -130,6 +122,7 @@ export const createSubAdmin = async (
 
         if (error) throw error;
 
+        // Remove sensitive data before returning
         const { password_hash, ...safeAdmin } = data;
 
         return {
@@ -146,17 +139,15 @@ export const createSubAdmin = async (
 /**
  * Deactivate a sub-admin
  * @param {string} subAdminId - Sub-admin ID
- * @param {string} deactivationReason - Reason for deactivation
  * @returns {Promise<Object>} Updated admin
  */
-export const deactivateSubAdmin = async (subAdminId, deactivationReason) => {
+export const deactivateSubAdmin = async (subAdminId) => {
     try {
         const { data, error } = await supabase
             .from("admins")
             .update({
                 is_active: false,
-                deactivated_at: new Date().toISOString(),
-                deactivation_reason: deactivationReason,
+                updated_at: new Date().toISOString(),
             })
             .eq("id", subAdminId)
             .select()

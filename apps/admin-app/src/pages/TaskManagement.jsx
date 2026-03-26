@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Plus, MapPin, Clock, Trash2, CheckCircle, Loader, AlertCircle } from 'lucide-react';
 import { selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
+import { fetchTasks, createTask, cancelTask, assignWorker } from '../features/tasks/taskAPI';
+import supabase from '../services/supabaseClient';
 import { TASK_TYPES, PRIORITIES, formatDate, PRIORITY_LABELS, PRIORITY_COLORS } from '../utils/constants';
 
 const getPriorityIcon = (priority) => {
@@ -22,6 +24,7 @@ function TaskManagement() {
 
     const [tasks, setTasks] = useState([]);
     const [workers, setWorkers] = useState([]);
+    const [villages, setVillages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -32,116 +35,118 @@ function TaskManagement() {
         title: '',
         type: 'bin_clean',
         description: '',
-        location: '',
+        location_lat: '',
+        location_lng: '',
+        location_address: '',
         priority: 2,
-        assignedWorker: '',
-        dueDate: '',
+        assigned_worker_id: '',
+        village_id: '',
+        due_at: '',
     });
 
     useEffect(() => {
-        fetchTasks();
-        fetchWorkers();
+        loadTasks();
+        loadWorkers();
+        loadVillages();
     }, [adminId]);
 
-    const fetchTasks = async () => {
+    const loadTasks = async () => {
         try {
             setLoading(true);
             setError(null);
-
-            // Mock data
-            setTasks([
-                {
-                    id: 1,
-                    title: 'Bin Cleanup - Market Road',
-                    type: 'bin_clean',
-                    location: 'Market Road',
-                    worker: 'Rajesh Kumar',
-                    status: 'in_progress',
-                    priority: 1,
-                    dueDate: '2026-03-22',
-                },
-                {
-                    id: 2,
-                    title: 'Litter Pickup - Park Area',
-                    type: 'litter_pickup',
-                    location: 'Central Park',
-                    worker: 'Priya Singh',
-                    status: 'pending',
-                    priority: 2,
-                    dueDate: '2026-03-25',
-                },
-                {
-                    id: 3,
-                    title: 'Drain Clearance - Main Street',
-                    type: 'drain_clearance',
-                    location: 'Main Street',
-                    worker: 'Amit Sharma',
-                    status: 'done',
-                    priority: 1,
-                    dueDate: '2026-03-20',
-                },
-            ]);
-
+            const data = await fetchTasks(adminId);
+            setTasks(data);
             showToast('Tasks loaded successfully', 'success');
         } catch (err) {
             setError(err.message || 'Failed to fetch tasks');
-            showToast('Failed to load tasks', 'error');
+            showToast('Failed to load tasks: ' + err.message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchWorkers = () => {
-        // Mock workers
-        setWorkers([
-            { id: 1, name: 'Rajesh Kumar' },
-            { id: 2, name: 'Priya Singh' },
-            { id: 3, name: 'Amit Sharma' },
-        ]);
+    const loadWorkers = async () => {
+        try {
+            const { data, error: err } = await supabase
+                .from('workers')
+                .select('id, employee_id, name, is_active')
+                .eq('created_by_admin_id', adminId)
+                .eq('is_active', true);
+
+            if (err) throw err;
+            setWorkers(data || []);
+        } catch (err) {
+            console.error('Error loading workers:', err);
+        }
+    };
+
+    const loadVillages = async () => {
+        try {
+            const { data, error: err } = await supabase
+                .from('villages')
+                .select('id, name')
+                .order('name', { ascending: true });
+
+            if (err) throw err;
+            setVillages(data || []);
+        } catch (err) {
+            console.error('Error loading villages:', err);
+        }
     };
 
     const handleCreateTask = async (e) => {
         e.preventDefault();
 
-        if (!formData.title || !formData.location || !formData.dueDate) {
+        if (!formData.title || !formData.location_address || !formData.due_at || !formData.village_id) {
             showToast('Please fill in all required fields', 'error');
             return;
         }
 
         try {
-            // Mock creation
-            const newTask = {
-                id: tasks.length + 1,
-                title: formData.title,
-                type: formData.type,
-                location: formData.location,
-                worker: workers.find(w => w.id == formData.assignedWorker)?.name || 'Unassigned',
-                status: 'pending',
-                priority: parseInt(formData.priority),
-                dueDate: formData.dueDate,
-            };
+            await createTask(
+                {
+                    title: formData.title,
+                    type: formData.type,
+                    description: formData.description,
+                    location_lat: parseFloat(formData.location_lat),
+                    location_lng: parseFloat(formData.location_lng),
+                    location_address: formData.location_address,
+                    priority: parseInt(formData.priority),
+                    village_id: formData.village_id,
+                    due_at: formData.due_at,
+                },
+                adminId
+            );
 
-            setTasks([...tasks, newTask]);
             showToast('Task created successfully', 'success');
             setShowModal(false);
             setFormData({
                 title: '',
                 type: 'bin_clean',
                 description: '',
-                location: '',
+                location_lat: '',
+                location_lng: '',
+                location_address: '',
                 priority: 2,
-                assignedWorker: '',
-                dueDate: '',
+                assigned_worker_id: '',
+                village_id: '',
+                due_at: '',
             });
+            await loadTasks();
         } catch (err) {
-            showToast('Failed to create task', 'error');
+            showToast('Failed to create task: ' + err.message, 'error');
         }
     };
 
-    const handleDeleteTask = (taskId) => {
-        if (!window.confirm('Are you sure you want to delete this task?')) return;
-        setTasks(tasks.filter(t => t.id !== taskId));
-        showToast('Task deleted', 'success');
+    const handleDeleteTask = async (taskId) => {
+        if (!window.confirm('Are you sure you want to cancel this task?')) return;
+        try {
+            await cancelTask(taskId);
+            await loadTasks();
+            showToast('Task cancelled successfully', 'success');
+        } catch (err) {
+            showToast('Failed to cancel task: ' + err.message, 'error');
+        }
     };
 
     const filteredTasks = tasks.filter((task) => {
@@ -231,9 +236,9 @@ function TaskManagement() {
                                     <td><strong>{task.title}</strong></td>
                                     <td>{getTaskTypeName(task.type)}</td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        {task.location}
+                                        {task.location_address || 'N/A'}
                                     </td>
-                                    <td>{task.worker}</td>
+                                    <td>{task.worker?.name || 'Unassigned'}</td>
                                     <td>
                                         <div className={`admin-badge ${task.status === 'done' ? 'done' : task.status === 'in_progress' ? 'active' : task.status === 'pending' ? 'pending' : ''}`}>
                                             {task.status.replace('_', ' ')}
@@ -241,17 +246,22 @@ function TaskManagement() {
                                     </td>
                                     <td>{getPriorityIcon(task.priority)}</td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        {new Date(task.dueDate).toLocaleDateString('en-IN')}
+                                        {task.due_at ? new Date(task.due_at).toLocaleDateString('en-IN') : 'N/A'}
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button
-                                                className="admin-btn-outline admin-btn-sm"
-                                                style={{ fontSize: '11px' }}
-                                            >
-                                                Assign
-                                            </button>
-                                            {task.status === 'done' && task.proofUrl && (
+                                            {!task.assigned_worker_id && (
+                                                <button
+                                                    className="admin-btn-outline admin-btn-sm"
+                                                    style={{ fontSize: '11px' }}
+                                                    onClick={() => {
+                                                        // Open assign worker modal
+                                                    }}
+                                                >
+                                                    Assign
+                                                </button>
+                                            )}
+                                            {task.status === 'done' && task.proof_photo_url && (
                                                 <button
                                                     className="admin-btn-outline admin-btn-sm"
                                                     onClick={() => setShowProofModal(task)}
@@ -262,6 +272,7 @@ function TaskManagement() {
                                             )}
                                             <button
                                                 className="admin-btn-outline admin-btn-sm danger"
+                                                onClick={() => handleDeleteTask(task.id)}
                                                 style={{ fontSize: '11px' }}
                                             >
                                                 Cancel
@@ -355,6 +366,18 @@ function TaskManagement() {
                                     ></textarea>
                                 </div>
 
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label required">Location Address</label>
+                                    <input
+                                        type="text"
+                                        className="admin-form-input"
+                                        placeholder="Location address"
+                                        value={formData.location_address}
+                                        onChange={(e) => setFormData({ ...formData, location_address: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                                     <div className="admin-form-group">
                                         <label className="admin-form-label">Latitude</label>
@@ -363,8 +386,8 @@ function TaskManagement() {
                                             className="admin-form-input"
                                             placeholder="Latitude"
                                             step="0.0001"
-                                            value={formData.latitude}
-                                            onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                                            value={formData.location_lat}
+                                            onChange={(e) => setFormData({ ...formData, location_lat: e.target.value })}
                                         />
                                     </div>
                                     <div className="admin-form-group">
@@ -374,10 +397,32 @@ function TaskManagement() {
                                             className="admin-form-input"
                                             placeholder="Longitude"
                                             step="0.0001"
-                                            value={formData.longitude}
-                                            onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                                            value={formData.location_lng}
+                                            onChange={(e) => setFormData({ ...formData, location_lng: e.target.value })}
                                         />
                                     </div>
+                                </div>
+
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label required">Village</label>
+                                    <select
+                                        className="admin-form-select"
+                                        value={formData.village_id}
+                                        onChange={(e) => setFormData({ ...formData, village_id: e.target.value })}
+                                        required
+                                        disabled={villages.length === 0}
+                                    >
+                                        <option value="">
+                                            {villages.length === 0
+                                                ? 'No villages configured in Supabase'
+                                                : 'Select a village'}
+                                        </option>
+                                        {villages.map((v) => (
+                                            <option key={v.id} value={v.id}>
+                                                {v.name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className="admin-form-group">
@@ -403,28 +448,29 @@ function TaskManagement() {
                                 </div>
 
                                 <div className="admin-form-group">
-                                    <label className="admin-form-label">Assign Worker</label>
+                                    <label className="admin-form-label">Assign Worker (Optional)</label>
                                     <select
                                         className="admin-form-select"
-                                        value={formData.assignedWorker}
-                                        onChange={(e) => setFormData({ ...formData, assignedWorker: e.target.value })}
+                                        value={formData.assigned_worker_id}
+                                        onChange={(e) => setFormData({ ...formData, assigned_worker_id: e.target.value })}
                                     >
                                         <option value="">Select a worker</option>
                                         {workers.map((w) => (
                                             <option key={w.id} value={w.id}>
-                                                {w.name}
+                                                {w.name} ({w.employee_id})
                                             </option>
                                         ))}
                                     </select>
                                 </div>
 
                                 <div className="admin-form-group">
-                                    <label className="admin-form-label">Due Date</label>
+                                    <label className="admin-form-label required">Due Date</label>
                                     <input
                                         type="datetime-local"
                                         className="admin-form-input"
-                                        value={formData.dueDate}
-                                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                                        value={formData.due_at}
+                                        onChange={(e) => setFormData({ ...formData, due_at: e.target.value })}
+                                        required
                                     />
                                 </div>
 

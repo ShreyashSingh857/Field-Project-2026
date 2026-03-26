@@ -1,89 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Navbar from '../components/Navbar';
+import { useDispatch, useSelector } from 'react-redux';
 import BottomNav from '../components/BottomNav';
+import Navbar from '../components/Navbar';
 import TaskCard from '../components/TaskCard';
+import { initTaskRealtime, loadTasks, stopTaskRealtime } from '../features/tasks/taskSlice';
 
-// Mock data for Phase 1, 2, & 3 MVP
-const mockTasks = [
-  {
-    id: 't1',
-    binId: 'BIN-104',
-    binName: 'Main Square Bin',
-    fillLevel: 95,
-    priority: 'high',
-    slaCountdown: '15 mins left',
-    distance: '200m',
-    status: 'pending',
-    overdue: false,
-    smartPick: true,
-    smartReason: 'Critical Fill in High Density Area'
-  },
-  {
-    id: 't2',
-    binId: 'BIN-108',
-    binName: 'Market Line 2',
-    fillLevel: 80,
-    priority: 'high',
-    slaCountdown: 'Overdue by 10 mins',
-    distance: '450m',
-    status: 'pending',
-    overdue: true,
-    smartPick: false,
-  },
-  {
-    id: 't3',
-    binId: 'BIN-085',
-    binName: 'School Road Bin',
-    fillLevel: 55,
-    priority: 'medium',
-    slaCountdown: '2 hours left',
-    distance: '1.2km',
-    status: 'in_progress',
-    overdue: false,
-  },
-  {
-    id: 't4',
-    binId: 'BIN-012',
-    binName: 'River Side Bin',
-    fillLevel: 10,
-    priority: 'low',
-    slaCountdown: 'Completed',
-    distance: '800m',
-    status: 'completed',
-    overdue: false,
-  }
-];
+const toCardTask = (task) => {
+  const fillLevel = task?.bin?.fill_level ?? 0;
+  const priority = task.priority === 1 ? 'high' : task.priority === 3 ? 'low' : 'medium';
+  const status = task.status === 'done' ? 'completed' : task.status;
+
+  return {
+    id: task.id,
+    binId: task?.bin?.id?.slice(0, 8) || 'BIN',
+    binName: task?.bin?.label || task.title,
+    fillLevel,
+    priority,
+    slaCountdown: task.due_at ? `Due ${new Date(task.due_at).toLocaleTimeString()}` : 'No SLA',
+    distance: '--',
+    status,
+    overdue: task.due_at ? new Date(task.due_at) < new Date() && status !== 'completed' : false,
+    smartPick: priority === 'high',
+    smartReason: priority === 'high' ? 'Priority task' : undefined,
+  };
+};
 
 const TaskDashboard = () => {
   const { t, i18n } = useTranslation();
+  const dispatch = useDispatch();
   const [lang, setLang] = useState('en');
+  const { worker } = useSelector((state) => state.auth);
+  const { items, loading } = useSelector((state) => state.tasks);
+
+  useEffect(() => {
+    if (!worker?.id) return;
+
+    dispatch(loadTasks({ workerId: worker.id, villageId: worker.village_id }));
+    if (worker.village_id) {
+      dispatch(initTaskRealtime({ villageId: worker.village_id }));
+    }
+
+    return () => {
+      dispatch(stopTaskRealtime());
+    };
+  }, [dispatch, worker?.id, worker?.village_id]);
+
+  const cardTasks = useMemo(() => items.map(toCardTask), [items]);
+  const tasksCompleted = cardTasks.filter((task) => task.status === 'completed').length;
+  const totalTasks = cardTasks.length || 1;
 
   const toggleLang = () => {
-    const nextLang = lang === 'en' ? 'hi' : lang === 'hi' ? 'mr' : 'en';        
+    const nextLang = lang === 'en' ? 'hi' : lang === 'hi' ? 'mr' : 'en';
     setLang(nextLang);
     i18n.changeLanguage(nextLang);
   };
 
-  const tasksCompleted = mockTasks.filter(t => t.status === 'completed').length;
-  const totalTasks = mockTasks.length;
-
   return (
     <div className="bg-[var(--sm-bg)] min-h-screen">
       <Navbar
-        workerName="Ramesh Kumar"
-        area="South Village Sector"
+        workerName={worker?.name || 'Worker'}
+        area={worker?.assigned_area || 'Assigned Area'}
         onLanguageToggle={toggleLang}
         lang={lang}
       />
 
       <div className="sm-page">
-        {/* Simple Performance View */}
         <div className="bg-white rounded-lg p-4 shadow-sm mb-6 flex justify-between items-center border border-gray-100">
           <div>
             <div className="text-[var(--sm-text-muted)] text-[12px] font-medium mb-1">{t('todayTasks')}</div>
             <div className="text-[20px] font-bold text-[var(--sm-text)]">
-              {tasksCompleted} / {totalTasks}
+              {tasksCompleted} / {cardTasks.length}
               <span className="text-[14px] font-normal text-[var(--sm-text-muted)] ml-2">{t('tasksCompleted')}</span>
             </div>
           </div>
@@ -92,43 +79,20 @@ const TaskDashboard = () => {
           </div>
         </div>
 
-        {/* Notifications (Phase 2 Enhanced Alerts) */}
-        <div className="flex flex-col gap-2 mb-6">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3 shadow-sm animate-pulse">
-            <div className="mt-0.5 text-red-600">
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-[13px] font-bold text-red-800">Critical Alert</div>
-              <div className="text-[12px] text-red-700 font-medium">Market Line 2 bin is overdue by 10 mins!</div>
-            </div>
-          </div>
-          
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-3 shadow-sm">
-            <div className="mt-0.5 text-orange-600">
-               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <div className="text-[13px] font-bold text-orange-800">SLA Warning</div>
-              <div className="text-[12px] text-orange-700">Main Square Bin SLA breaches in 15 mins.</div>
-            </div>
-          </div>
-        </div>
-
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-[16px] font-bold text-[var(--sm-text)]">{t('todayTasks')}</h2>
-          <span className="text-[12px] text-[var(--sm-text-muted)]">{totalTasks} {t('assigned')}</span>
+          <span className="text-[12px] text-[var(--sm-text-muted)]">{cardTasks.length} {t('assigned')}</span>
         </div>
 
-        {/* Task List */}
+        {loading && <div className="text-sm text-gray-600 mb-3">Loading tasks...</div>}
+
         <div className="flex flex-col gap-1 pb-20">
-          {mockTasks.map(task => (
+          {cardTasks.map((task) => (
             <TaskCard key={task.id} task={task} />
           ))}
+          {!loading && cardTasks.length === 0 && (
+            <div className="text-sm text-gray-500 bg-white p-4 rounded-lg border border-gray-100">No tasks assigned yet.</div>
+          )}
         </div>
       </div>
 
