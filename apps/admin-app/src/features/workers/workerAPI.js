@@ -35,27 +35,21 @@ const generateTempPassword = () => {
 };
 
 /**
- * Fetch all workers for an admin with scope filtering
- * @param {string} adminId - Admin ID
- * @param {string} scope - Admin's jurisdiction scope
+ * Fetch all workers for an admin
+ * @param {string} adminId - Admin ID creating these workers
  * @returns {Promise<Array>} List of workers
  */
-export const fetchWorkers = async (adminId, scope) => {
+export const fetchWorkers = async (adminId) => {
     try {
-        let query = supabase
+        const { data, error } = await supabase
             .from("workers")
             .select(
-                "id, employee_id, name, email, phone, assigned_zone, assigned_beat, status, is_active, created_at"
-            );
-
-        // Apply scope filtering based on admin's jurisdiction
-        if (scope && scope !== "national") {
-            query = query.eq("jurisdiction_scope", scope);
-        }
-
-        const { data, error } = await query.order("created_at", {
-            ascending: false,
-        });
+                "id, employee_id, name, phone, assigned_area, village_id, language, is_active, last_login_at, created_at"
+            )
+            .eq("created_by_admin_id", adminId)
+            .order("created_at", {
+                ascending: false,
+            });
 
         if (error) throw error;
         return data || [];
@@ -67,7 +61,7 @@ export const fetchWorkers = async (adminId, scope) => {
 
 /**
  * Create a new worker
- * @param {Object} workerData - Worker details
+ * @param {Object} workerData - Worker details: {name, phone, assigned_area, village_id, language}
  * @param {string} adminId - Creating admin ID
  * @returns {Promise<Object>} Created worker object with temp password
  */
@@ -83,15 +77,15 @@ export const createWorker = async (workerData, adminId) => {
                 {
                     employee_id: employeeId,
                     name: workerData.name,
-                    email: workerData.email?.toLowerCase(),
                     phone: workerData.phone,
-                    assigned_zone: workerData.assigned_zone,
-                    assigned_beat: workerData.assigned_beat,
+                    assigned_area: workerData.assigned_area,
+                    village_id: workerData.village_id,
+                    language: workerData.language || "en",
                     password_hash: passwordHash,
                     is_active: true,
-                    status: "active",
-                    created_by: adminId,
+                    created_by_admin_id: adminId,
                     created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                 },
             ])
             .select()
@@ -114,18 +108,15 @@ export const createWorker = async (workerData, adminId) => {
 /**
  * Deactivate a worker
  * @param {string} workerId - Worker ID
- * @param {string} deactivationReason - Reason for deactivation
  * @returns {Promise<Object>} Updated worker
  */
-export const deactivateWorker = async (workerId, deactivationReason) => {
+export const deactivateWorker = async (workerId) => {
     try {
         const { data, error } = await supabase
             .from("workers")
             .update({
                 is_active: false,
-                status: "inactive",
-                deactivated_at: new Date().toISOString(),
-                deactivation_reason: deactivationReason,
+                updated_at: new Date().toISOString(),
             })
             .eq("id", workerId)
             .select()

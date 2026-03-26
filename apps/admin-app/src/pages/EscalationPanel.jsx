@@ -3,6 +3,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Loader, AlertTriangle, CheckCircle } from 'lucide-react';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
+import {
+    fetchOverdueItems,
+    addResolutionNote,
+    markTaskResolved,
+    reassignTask,
+    escalateTask,
+    getAvailableWorkers,
+} from '../features/escalation/escalationAPI';
 
 function EscalationPanel() {
     const dispatch = useDispatch();
@@ -15,47 +23,29 @@ function EscalationPanel() {
     const [resolutionNotes, setResolutionNotes] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [availableWorkers, setAvailableWorkers] = useState([]);
+    const [selectedWorkerForReassign, setSelectedWorkerForReassign] = useState('');
 
     useEffect(() => {
-        fetchOverdueItems();
+        loadOverdueItems();
     }, [adminId]);
 
-    const fetchOverdueItems = async () => {
+    const loadOverdueItems = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            // Mock data
-            setOverdueItems([
-                {
-                    id: 1,
-                    taskTitle: 'Bin Cleanup - Market Road',
-                    village: 'Gokul Nagar',
-                    worker: 'Rajesh Kumar',
-                    daysOverdue: 3,
-                    status: 'in_progress',
-                },
-                {
-                    id: 2,
-                    taskTitle: 'Drain Clearance - Main Street',
-                    village: 'Ram Vihar',
-                    worker: 'Priya Singh',
-                    daysOverdue: 5,
-                    status: 'assigned',
-                },
-                {
-                    id: 3,
-                    taskTitle: 'Litter Pickup - Park Area',
-                    village: 'Shyam Nagar',
-                    worker: 'Amit Sharma',
-                    daysOverdue: 2,
-                    status: 'pending',
-                },
-            ]);
+            const data = await fetchOverdueItems(adminId);
+            setOverdueItems(data);
 
-            showToast('Escalation data loaded', 'success');
+            // Load available workers for reassignment
+            if (data.length > 0) {
+                const workers = await getAvailableWorkers(adminId);
+                setAvailableWorkers(workers);
+            }
         } catch (err) {
-            setError('Failed to fetch overdue items');
+            console.error('Error loading overdue items:', err);
+            setError('Failed to load escalation data');
             showToast('Failed to load escalation data', 'error');
         } finally {
             setLoading(false);
@@ -69,33 +59,58 @@ function EscalationPanel() {
         }
 
         try {
-            // Mock API call
+            await addResolutionNote(taskId, resolutionNotes);
             showToast('Note saved successfully', 'success');
             setResolutionNotes('');
         } catch (err) {
+            console.error('Error saving note:', err);
             showToast('Failed to save note', 'error');
         }
     };
 
-    const handleReassign = (taskId) => {
-        showToast('Reassign worker dialog - To be implemented', 'info');
+    const handleReassign = async (taskId) => {
+        if (!selectedWorkerForReassign) {
+            showToast('Please select a worker', 'error');
+            return;
+        }
+
+        try {
+            await reassignTask(taskId, selectedWorkerForReassign);
+            showToast('Task reassigned successfully', 'success');
+            setSelectedWorkerForReassign('');
+            await loadOverdueItems();
+        } catch (err) {
+            console.error('Error reassigning task:', err);
+            showToast('Failed to reassign task', 'error');
+        }
     };
 
     const handleMarkResolved = async (taskId) => {
         try {
+            await markTaskResolved(taskId);
             setOverdueItems(overdueItems.filter((item) => item.id !== taskId));
             showToast('Task marked as resolved', 'success');
             setSelectedTaskId(null);
         } catch (err) {
+            console.error('Error marking task resolved:', err);
             showToast('Failed to mark as resolved', 'error');
         }
     };
 
-    const handleEscalateHigher = (taskId) => {
+    const handleEscalateHigher = async (taskId) => {
         if (role === 'zilla_parishad') {
-            showToast('Cannot escalate further - highest level', 'info');
-        } else {
-            showToast('Task escalated to higher authority', 'success');
+            showToast('Cannot escalate further - highest level reached', 'info');
+            return;
+        }
+
+        try {
+            const escalationReason = `Escalated by ${role.replace(/_/g, ' ')} for resolution.`;
+            await escalateTask(taskId, escalationReason);
+            showToast('Task escalated to higher priority', 'success');
+            await loadOverdueItems();
+        } catch (err) {
+            console.error('Error escalating task:', err);
+            showToast('Failed to escalate task', 'error');
         }
     };
 
@@ -234,7 +249,7 @@ function EscalationPanel() {
                 )}
             </div>
 
-            {/* Notes Section */}
+            {/* Notes and Actions Section */}
             {selectedTaskId && (
                 <div className="admin-panel">
                     <h3
@@ -245,11 +260,40 @@ function EscalationPanel() {
                             color: 'var(--admin-text)',
                         }}
                     >
-                        Resolution Notes
+                        Task Actions
                     </h3>
 
+                    {/* Reassign Section */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px' }}>
+                            Reassign to Different Worker
+                        </h4>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <select
+                                className="admin-form-select"
+                                value={selectedWorkerForReassign}
+                                onChange={(e) => setSelectedWorkerForReassign(e.target.value)}
+                                style={{ flex: 1 }}
+                            >
+                                <option value="">Select a worker...</option>
+                                {availableWorkers.map((worker) => (
+                                    <option key={worker.id} value={worker.id}>
+                                        {worker.name} ({worker.phone})
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                className="admin-btn-primary"
+                                onClick={() => handleReassign(selectedTaskId)}
+                            >
+                                Reassign
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Resolution Notes Section */}
                     <div className="admin-form-group">
-                        <label className="admin-form-label">Add Notes</label>
+                        <label className="admin-form-label">Add Resolution Notes</label>
                         <textarea
                             className="admin-form-textarea"
                             placeholder="Enter resolution notes for the selected task..."

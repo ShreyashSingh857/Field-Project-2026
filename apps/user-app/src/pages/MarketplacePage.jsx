@@ -14,76 +14,6 @@ import {
 } from "lucide-react";
 import { addListing, fetchListings } from "../features/marketplace/marketplaceSlice";
 
-/* ─── Mock product data ──────────────────────────────────── */
-const MOCK_PRODUCTS = [
-    {
-        id: 1,
-        name: "Wooden Chair",
-        price: 300,
-        distance: "250m",
-        ward: "Ward 3",
-        category: "furniture",
-        status: "available",
-        emoji: "🪑",
-        color: "#D7CCC8",
-    },
-    {
-        id: 2,
-        name: "School Books Set",
-        price: 80,
-        distance: "400m",
-        ward: "Ward 1",
-        category: "books",
-        status: "available",
-        emoji: "📚",
-        color: "#C5CAE9",
-    },
-    {
-        id: 3,
-        name: "Cotton Saree",
-        price: 150,
-        distance: "600m",
-        ward: "Ward 5",
-        category: "clothes",
-        status: "reserved",
-        emoji: "👗",
-        color: "#F8BBD9",
-    },
-    {
-        id: 4,
-        name: "Table Fan",
-        price: 450,
-        distance: "1.2km",
-        ward: "Ward 2",
-        category: "appliances",
-        status: "available",
-        emoji: "💨",
-        color: "#B2EBF2",
-    },
-    {
-        id: 5,
-        name: "Old Mobile Phone",
-        price: 600,
-        distance: "800m",
-        ward: "Ward 4",
-        category: "electronics",
-        status: "sold",
-        emoji: "📱",
-        color: "#DCEDC8",
-    },
-    {
-        id: 6,
-        name: "Plastic Stool",
-        price: 60,
-        distance: "150m",
-        ward: "Ward 3",
-        category: "furniture",
-        status: "available",
-        emoji: "🪣",
-        color: "#FFF9C4",
-    },
-];
-
 const FILTER_KEYS = ["all", "furniture", "clothes", "electronics", "appliances", "books", "other"];
 
 const STATUS_STYLES = {
@@ -303,7 +233,17 @@ function ProductCard({ product, t }) {
                 className="relative flex aspect-square items-center justify-center text-5xl"
                 style={{ backgroundColor: product.color }}
             >
-                <span>{product.emoji}</span>
+                {product.photo_url ? (
+                    <div className="h-full w-full p-4">
+                        <img
+                            src={product.photo_url}
+                            alt={product.name}
+                            className="h-full w-full rounded-2xl object-contain"
+                        />
+                    </div>
+                ) : (
+                    <span>{product.emoji}</span>
+                )}
 
                 {/* Status badge */}
                 <span
@@ -376,13 +316,14 @@ export default function MarketplacePage() {
     const [showAddSheet, setShowAddSheet] = useState(false);
     const [filterRotated, setFilterRotated] = useState(false);
     useEffect(() => {
-        dispatch(fetchListings(villageId));
-    }, [dispatch, villageId]);
+        dispatch(fetchListings({ villageId, mineOnly }));
+    }, [dispatch, villageId, mineOnly]);
 
     const mapListingToProduct = (item) => ({
         id: item.id,
         name: item.title || item.name || 'Item',
         price: item.price || 0,
+        photo_url: item.photo_url || null,
         distance: item.distance || '',
         ward: item.village?.name || item.ward || '-',
         category: item.category || 'other',
@@ -393,20 +334,25 @@ export default function MarketplacePage() {
         seller_id: item.seller_id,
     });
 
-    const products = useMemo(() => {
-        if (!listings?.length) return MOCK_PRODUCTS;
-        return listings.map(mapListingToProduct);
-    }, [listings]);
+    const products = useMemo(() => listings.map(mapListingToProduct), [listings]);
 
     const handleAddItem = async (newItem) => {
+        const contactNumber =
+            user?.phone ||
+            user?.phone_number ||
+            user?.user_metadata?.phone ||
+            user?.user_metadata?.phone_number ||
+            user?.user_metadata?.mobile ||
+            '';
+
         await dispatch(addListing({
             name: newItem.name,
             description: newItem.description,
             price: newItem.price,
-            contact: user?.phone || user?.user_metadata?.phone || '',
+            contact: contactNumber,
             photo: newItem.photo || null,
         }));
-        dispatch(fetchListings(villageId));
+        dispatch(fetchListings({ villageId, mineOnly }));
     };
 
     const filtered = useMemo(() => {

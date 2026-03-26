@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
-import { scanWaste } from '../controllers/aiController.js';
+import { scanWaste, chatWithAssistant } from '../controllers/aiController.js';
 
 const router = Router();
 
@@ -27,5 +27,7 @@ router.post(
   upload.single('photo'),
   scanWaste
 );
+
+router.post('/chat', verifySupabaseAuth, chatWithAssistant);
 
 export default router;

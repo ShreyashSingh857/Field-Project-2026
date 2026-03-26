@@ -1,49 +1,29 @@
 import supabase from "../../services/supabaseClient";
 
 /**
- * Fetch all tasks with optional filtering
+ * Fetch all tasks for an admin (scoped by created_by_admin_id)
  * @param {string} adminId - Admin ID
- * @param {string} scope - Admin's jurisdiction scope
- * @param {Object} filters - Optional filters (status, assigned_to, zone, beat)
+ * @param {Object} filters - Optional filters (status, assigned_worker_id)
  * @returns {Promise<Array>} List of tasks
  */
-export const fetchTasks = async (adminId, scope, filters = {}) => {
+export const fetchTasks = async (adminId, filters = {}) => {
     try {
-        let query = supabase.from("tasks").select(
-            `id, 
-       task_id, 
-       type, 
-       location, 
-       zone, 
-       beat, 
-       description, 
-       assigned_to, 
-       status, 
-       priority, 
-       issue_id,
-       created_at, 
-       due_date, 
-       completed_at,
-       workers(id, employee_id, name, phone)`
-        );
+        let query = supabase
+            .from("tasks")
+            .select(
+                "id, type, title, description, status, priority, due_at, started_at, completed_at, " +
+                "location_lat, location_lng, location_address, proof_photo_url, " +
+                "assigned_worker_id, created_by_admin_id, reported_by_user_id, bin_id, village_id, " +
+                "created_at, updated_at, worker:workers(id, employee_id, name, phone)"
+            )
+            .eq("created_by_admin_id", adminId);
 
-        // Apply scope filtering
-        if (scope && scope !== "national") {
-            query = query.eq("jurisdiction_scope", scope);
-        }
-
-        // Apply provided filters
+        // Apply filters
         if (filters.status) {
             query = query.eq("status", filters.status);
         }
-        if (filters.assigned_to) {
-            query = query.eq("assigned_to", filters.assigned_to);
-        }
-        if (filters.zone) {
-            query = query.eq("zone", filters.zone);
-        }
-        if (filters.beat) {
-            query = query.eq("beat", filters.beat);
+        if (filters.assigned_worker_id) {
+            query = query.eq("assigned_worker_id", filters.assigned_worker_id);
         }
 
         const { data, error } = await query.order("created_at", {
@@ -60,46 +40,31 @@ export const fetchTasks = async (adminId, scope, filters = {}) => {
 
 /**
  * Create a new task
- * @param {Object} taskData - Task details
+ * @param {Object} taskData - Task details: {type, title, description, location_lat, location_lng, location_address, priority, village_id, bin_id, reported_by_user_id, due_at}
  * @param {string} adminId - Creating admin ID
  * @returns {Promise<Object>} Created task
  */
 export const createTask = async (taskData, adminId) => {
     try {
-        // Generate task ID
-        const { data: lastTask } = await supabase
-            .from("tasks")
-            .select("task_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-        let nextNumber = 1;
-        if (lastTask && lastTask.length > 0) {
-            const match = lastTask[0].task_id.match(/TASK-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
-        }
-
-        const taskId = `TASK-${String(nextNumber).padStart(5, "0")}`;
-
         const { data, error } = await supabase
             .from("tasks")
             .insert([
                 {
-                    task_id: taskId,
                     type: taskData.type,
-                    location: taskData.location,
-                    zone: taskData.zone,
-                    beat: taskData.beat,
+                    title: taskData.title,
                     description: taskData.description,
-                    assigned_to: taskData.assigned_to || null,
+                    location_lat: taskData.location_lat,
+                    location_lng: taskData.location_lng,
+                    location_address: taskData.location_address,
                     status: "pending",
-                    priority: taskData.priority || "medium",
-                    issue_id: taskData.issue_id || null,
-                    created_by: adminId,
+                    priority: taskData.priority || 2, // 1=Urgent, 2=Normal, 3=Low
+                    village_id: taskData.village_id,
+                    bin_id: taskData.bin_id || null,
+                    reported_by_user_id: taskData.reported_by_user_id || null,
+                    due_at: taskData.due_at || null,
+                    created_by_admin_id: adminId,
                     created_at: new Date().toISOString(),
-                    due_date: taskData.due_date || null,
+                    updated_at: new Date().toISOString(),
                 },
             ])
             .select()
@@ -135,9 +100,10 @@ export const assignWorker = async (taskId, workerId) => {
         const { data, error } = await supabase
             .from("tasks")
             .update({
-                assigned_to: workerId,
+                assigned_worker_id: workerId,
                 status: "assigned",
-                assigned_at: new Date().toISOString(),
+                started_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", taskId)
             .select()
@@ -154,17 +120,15 @@ export const assignWorker = async (taskId, workerId) => {
 /**
  * Cancel a task
  * @param {string} taskId - Task ID
- * @param {string} cancelReason - Reason for cancellation
  * @returns {Promise<Object>} Updated task
  */
-export const cancelTask = async (taskId, cancelReason) => {
+export const cancelTask = async (taskId) => {
     try {
         const { data, error } = await supabase
             .from("tasks")
             .update({
                 status: "cancelled",
-                cancelled_at: new Date().toISOString(),
-                cancellation_reason: cancelReason,
+                updated_at: new Date().toISOString(),
             })
             .eq("id", taskId)
             .select()
@@ -181,7 +145,7 @@ export const cancelTask = async (taskId, cancelReason) => {
 /**
  * Update task status
  * @param {string} taskId - Task ID
- * @param {string} status - New status (pending, assigned, in_progress, completed, cancelled)
+ * @param {string} status - New status (pending|assigned|in_progress|done|cancelled)
  * @returns {Promise<Object>} Updated task
  */
 export const updateTaskStatus = async (taskId, status) => {
@@ -191,7 +155,7 @@ export const updateTaskStatus = async (taskId, status) => {
             updated_at: new Date().toISOString(),
         };
 
-        if (status === "completed") {
+        if (status === "done") {
             updateData.completed_at = new Date().toISOString();
         }
 
@@ -220,9 +184,10 @@ export const getTaskById = async (taskId) => {
         const { data, error } = await supabase
             .from("tasks")
             .select(
-                `*,
-         workers(id, employee_id, name, email, phone),
-         issues(id, title, description, status)`
+                "id, type, title, description, status, priority, due_at, started_at, completed_at, " +
+                "location_lat, location_lng, location_address, proof_photo_url, " +
+                "assigned_worker_id, created_by_admin_id, reported_by_user_id, bin_id, village_id, " +
+                "created_at, updated_at, worker:workers(id, employee_id, name, phone)"
             )
             .eq("id", taskId)
             .single();
