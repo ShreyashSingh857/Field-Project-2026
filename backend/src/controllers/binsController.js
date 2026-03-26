@@ -1,13 +1,16 @@
 // backend/src/controllers/binsController.js
 import { supabaseAdmin } from '../config/supabase.js';
 
-// ── SMART BINS ─────────────────────────────────────────────────────────────
+// ── BINS ───────────────────────────────────────────────────────────────────
 
 /** GET /api/bins  — public, optionally filter by village_id */
 export async function listBins(req, res) {
-  const { village_id } = req.query;
-  let query = supabaseAdmin.from('smart_bins').select('*').order('created_at', { ascending: false });
+  const { village_id, assigned_panchayat_id, is_active } = req.query;
+  let query = supabaseAdmin.from('bins').select('*').order('created_at', { ascending: false });
   if (village_id) query = query.eq('village_id', village_id);
+  if (assigned_panchayat_id) query = query.eq('assigned_panchayat_id', assigned_panchayat_id);
+  if (is_active === 'true') query = query.eq('is_active', true);
+  if (is_active === 'false') query = query.eq('is_active', false);
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   return res.json({ bins: data });
@@ -16,7 +19,7 @@ export async function listBins(req, res) {
 /** GET /api/bins/:id  — public */
 export async function getBin(req, res) {
   const { data, error } = await supabaseAdmin
-    .from('smart_bins')
+    .from('bins')
     .select('*')
     .eq('id', req.params.id)
     .single();
@@ -26,13 +29,37 @@ export async function getBin(req, res) {
 
 /** POST /api/bins  — admin only */
 export async function createBin(req, res) {
-  const { label, location_lat, location_lng, village_id, bin_type, fill_level } = req.body;
-  if (!label || location_lat == null || location_lng == null)
-    return res.status(400).json({ error: 'label, location_lat, location_lng are required' });
+  const {
+    label,
+    location_lat,
+    location_lng,
+    location_address,
+    village_id,
+    fill_level,
+    assigned_panchayat_id,
+    sensor_device_id,
+    is_active,
+  } = req.body;
+  if (!label || location_lat == null || location_lng == null || !assigned_panchayat_id) {
+    return res.status(400).json({
+      error: 'label, location_lat, location_lng and assigned_panchayat_id are required',
+    });
+  }
 
   const { data, error } = await supabaseAdmin
-    .from('smart_bins')
-    .insert({ label, location_lat, location_lng, village_id, bin_type: bin_type || 'general', fill_level: fill_level ?? 0 })
+    .from('bins')
+    .insert({
+      label,
+      location_lat,
+      location_lng,
+      location_address: location_address || null,
+      village_id: village_id || null,
+      fill_level: fill_level ?? 0,
+      assigned_panchayat_id,
+      sensor_device_id: sensor_device_id || null,
+      is_active: is_active ?? true,
+      last_sensor_update: fill_level != null ? new Date().toISOString() : null,
+    })
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
@@ -41,10 +68,25 @@ export async function createBin(req, res) {
 
 /** PATCH /api/bins/:id  — admin only */
 export async function updateBin(req, res) {
-  const allowed = ['label', 'location_lat', 'location_lng', 'village_id', 'bin_type', 'fill_level'];
+  const allowed = [
+    'label',
+    'location_lat',
+    'location_lng',
+    'location_address',
+    'village_id',
+    'fill_level',
+    'assigned_panchayat_id',
+    'sensor_device_id',
+    'is_active',
+  ];
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
+
+  if (updates.fill_level != null) {
+    updates.last_sensor_update = new Date().toISOString();
+  }
+
   const { data, error } = await supabaseAdmin
-    .from('smart_bins')
+    .from('bins')
     .update(updates)
     .eq('id', req.params.id)
     .select()
@@ -55,7 +97,7 @@ export async function updateBin(req, res) {
 
 /** DELETE /api/bins/:id  — admin only */
 export async function deleteBin(req, res) {
-  const { error } = await supabaseAdmin.from('smart_bins').delete().eq('id', req.params.id);
+  const { error } = await supabaseAdmin.from('bins').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   return res.json({ ok: true });
 }
