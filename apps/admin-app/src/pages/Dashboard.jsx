@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Trash2, AlertTriangle, ClipboardList, MessageSquareWarning, Users, Loader } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
+import { fetchDashboardStats } from '../features/dashboard/dashboardAPI';
 import { useToast, Toast } from '../utils/useToast';
 import { PRIORITY_LABELS, PRIORITY_COLORS, STATUS_BADGE_CLASS } from '../utils/constants';
 
@@ -13,16 +14,23 @@ function Dashboard() {
     const { toast, showToast } = useToast();
 
     const [stats, setStats] = useState({
-        totalBins: 156,
-        binsNeedingAttention: 23,
-        tasksToday: 12,
-        openIssues: 8,
-        activeWorkers: role === 'panchayat_admin' ? 18 : 0,
+        totalBins: 0,
+        binsNeedingAttention: 0,
+        tasksToday: 0,
+        openIssues: 0,
+        activeWorkers: 0,
     });
     const [recentActivity, setRecentActivity] = useState([]);
     const [overdueItems, setOverdueItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+        const dashboardTitle = {
+            panchayat_admin: 'Village Dashboard',
+            gram_panchayat: 'Gram Panchayat Dashboard',
+            block_samiti: 'Block Samiti Dashboard',
+            zilla_parishad: 'District Dashboard',
+        }[role] || 'Dashboard';
 
     useEffect(() => {
         fetchDashboardData();
@@ -33,56 +41,16 @@ function Dashboard() {
             setLoading(true);
             setError(null);
 
-            // Mock data - Replace with actual Redux dispatch when APIs are ready
+            const liveStats = await fetchDashboardStats();
             setStats({
-                totalBins: 156,
-                binsNeedingAttention: 23,
-                tasksToday: 12,
-                openIssues: 8,
-                activeWorkers: role === 'panchayat_admin' ? 18 : 0,
+                totalBins: liveStats.totalBins,
+                binsNeedingAttention: liveStats.binsNeedingAttention,
+                tasksToday: liveStats.activeTasks,
+                openIssues: liveStats.openIssues,
+                activeWorkers: liveStats.totalWorkers,
             });
-
-            setRecentActivity([
-                {
-                    id: 1,
-                    type: 'task',
-                    description: 'Bin cleanup at Market Road',
-                    location: 'Market Road, Village A',
-                    status: 'in_progress',
-                    time: '1 hour ago',
-                },
-                {
-                    id: 2,
-                    type: 'issue',
-                    description: 'Litter accumulation reported',
-                    location: 'Park Area, Village B',
-                    status: 'open',
-                    time: '2 hours ago',
-                },
-                {
-                    id: 3,
-                    type: 'task',
-                    description: 'Drain clearance',
-                    location: 'Main Street',
-                    status: 'done',
-                    time: '3 hours ago',
-                },
-            ]);
-
-            setOverdueItems([
-                {
-                    id: 1,
-                    title: 'Bin Cleanup - Ward 5',
-                    workerName: 'Rajesh Kumar',
-                    daysOverdue: 2,
-                },
-                {
-                    id: 2,
-                    title: 'Drain Clearance - Market Area',
-                    workerName: 'Priya Singh',
-                    daysOverdue: 1,
-                },
-            ]);
+            setRecentActivity(liveStats.recentActivity || []);
+            setOverdueItems(liveStats.overdueItems || []);
 
             showToast('Dashboard data loaded', 'success');
         } catch (err) {
@@ -110,6 +78,13 @@ function Dashboard() {
         return type === 'task' ? 'Task' : 'Issue';
     };
 
+    const formatActivityTime = (isoTime) => {
+        if (!isoTime) return 'N/A';
+        const date = new Date(isoTime);
+        if (Number.isNaN(date.getTime())) return String(isoTime);
+        return date.toLocaleString('en-IN');
+    };
+
     if (loading) {
         return (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--admin-muted)' }}>
@@ -122,7 +97,7 @@ function Dashboard() {
     return (
         <div>
             <Toast toast={toast} />
-            <h1 className="admin-page-title">Dashboard</h1>
+            <h1 className="admin-page-title">{dashboardTitle}</h1>
 
             {error && (
                 <div className="admin-alert danger" style={{ marginBottom: '20px' }}>
@@ -134,20 +109,20 @@ function Dashboard() {
             <div className="admin-stat-grid">
                 <StatCard
                     icon={Trash2}
-                    label="Bins Monitored"
+                    label={role === 'panchayat_admin' ? 'Total Bins' : 'Active Bins'}
                     value={stats.totalBins}
                     sub="Total in jurisdiction"
                 />
                 <StatCard
                     icon={AlertTriangle}
-                    label="Bins Needing Attention"
+                    label={role === 'panchayat_admin' ? 'Bin Fill Alerts' : 'Escalated Issues'}
                     value={stats.binsNeedingAttention}
-                    sub={`${((stats.binsNeedingAttention / stats.totalBins) * 100).toFixed(1)}% of total`}
+                    sub={stats.totalBins ? `${((stats.binsNeedingAttention / stats.totalBins) * 100).toFixed(1)}% of total` : '0.0% of total'}
                     variant="warning"
                 />
                 <StatCard
                     icon={ClipboardList}
-                    label="Tasks Today"
+                    label={role === 'panchayat_admin' ? 'Tasks Today' : 'District-Wide Tasks'}
                     value={stats.tasksToday}
                     sub="Created in last 24h"
                 />
@@ -256,7 +231,7 @@ function Dashboard() {
                                             </div>
                                         </td>
                                         <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                            {item.time}
+                                            {formatActivityTime(item.time)}
                                         </td>
                                     </tr>
                                 ))}

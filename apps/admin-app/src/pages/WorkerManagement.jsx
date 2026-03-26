@@ -3,8 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Trash2, Copy, Loader } from 'lucide-react';
 import { selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
-import { fetchWorkers, createWorker, deactivateWorker } from '../features/workers/workerAPI';
-import supabase from '../services/supabaseClient';
+import { fetchWorkers, createWorker, deactivateWorker, fetchAssignedAreaOptions } from '../features/workers/workerAPI';
+import api from '../services/axiosInstance';
 
 function WorkerManagement() {
     const dispatch = useDispatch();
@@ -17,19 +17,35 @@ function WorkerManagement() {
     const [showModal, setShowModal] = useState(false);
     const [successCredentials, setSuccessCredentials] = useState(null);
     const [villages, setVillages] = useState([]);
+    const [areaOptions, setAreaOptions] = useState([]);
 
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
         assigned_area: '',
         village_id: '',
+        password: '',
         language: 'en',
     });
 
     useEffect(() => {
         loadWorkers();
         loadVillages();
+        loadAreaOptions();
     }, [adminId]);
+
+    const loadAreaOptions = async () => {
+        try {
+            const options = await fetchAssignedAreaOptions();
+            setAreaOptions(options);
+            if (!formData.assigned_area && options.length > 0) {
+                setFormData((prev) => ({ ...prev, assigned_area: options[0].label }));
+            }
+        } catch (err) {
+            console.error('Error loading area options:', err);
+            setAreaOptions([]);
+        }
+    };
 
     const loadWorkers = async () => {
         try {
@@ -48,13 +64,8 @@ function WorkerManagement() {
 
     const loadVillages = async () => {
         try {
-            const { data, error: err } = await supabase
-                .from('villages')
-                .select('id, name')
-                .order('name', { ascending: true });
-
-            if (err) throw err;
-            setVillages(data || []);
+            const { data } = await api.get('/admin/villages');
+            setVillages(data?.villages || []);
         } catch (err) {
             console.error('Error loading villages:', err);
         }
@@ -75,6 +86,7 @@ function WorkerManagement() {
                     phone: formData.phone,
                     assigned_area: formData.assigned_area,
                     village_id: formData.village_id,
+                    password: formData.password || undefined,
                     language: formData.language,
                 },
                 adminId
@@ -86,7 +98,7 @@ function WorkerManagement() {
                 temp_password: result.temp_password,
             });
 
-            setFormData({ name: '', phone: '', assigned_area: '', village_id: '', language: 'en' });
+            setFormData({ name: '', phone: '', assigned_area: '', village_id: '', password: '', language: 'en' });
             await loadWorkers();
             showToast('Worker created successfully', 'success');
         } catch (err) {
@@ -317,14 +329,20 @@ function WorkerManagement() {
 
                                     <div className="admin-form-group">
                                         <label className="admin-form-label required">Assigned Area</label>
-                                        <input
-                                            type="text"
-                                            className="admin-form-input"
-                                            placeholder="e.g. Ward 3, Gokul Nagar"
+                                        <select
+                                            className="admin-form-select"
                                             value={formData.assigned_area}
                                             onChange={(e) => setFormData({ ...formData, assigned_area: e.target.value })}
                                             required
-                                        />
+                                            disabled={areaOptions.length === 0}
+                                        >
+                                            <option value="">
+                                                {areaOptions.length === 0 ? 'No panchayat admin areas found' : 'Select panchayat admin area'}
+                                            </option>
+                                            {areaOptions.map((opt) => (
+                                                <option key={opt.id} value={opt.label}>{opt.label}</option>
+                                            ))}
+                                        </select>
                                     </div>
 
                                     <div className="admin-form-group">
@@ -347,6 +365,17 @@ function WorkerManagement() {
                                                 </option>
                                             ))}
                                         </select>
+                                    </div>
+
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label">Password (Optional)</label>
+                                        <input
+                                            type="password"
+                                            className="admin-form-input"
+                                            placeholder="Set worker password or leave blank to auto-generate"
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        />
                                     </div>
 
                                     <div className="admin-form-group">

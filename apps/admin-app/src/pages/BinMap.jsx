@@ -1,10 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Loader } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
-import { FILL_STATUS_COLOR } from '../utils/constants';
-import { fetchBins } from '../features/bins/binAPI';
+import { fetchBins, createBin } from '../features/bins/binAPI';
+import api from '../services/axiosInstance';
+
+const colorByFill = (fill) => {
+    if (fill <= 40) return '#2E7D32';
+    if (fill <= 75) return '#EF9F27';
+    return '#E24B4A';
+};
+
+const statusByFill = (fill) => {
+    if (fill <= 20) return 'empty';
+    if (fill <= 40) return 'low';
+    if (fill <= 75) return 'medium';
+    if (fill <= 90) return 'high';
+    return 'overflow';
+};
+
+const makeImgIcon = (src, size = [34, 34]) =>
+    L.icon({
+        iconUrl: src,
+        iconSize: size,
+        iconAnchor: [size[0] / 2, size[1]],
+        popupAnchor: [0, -(size[1] + 4)],
+    });
+
+const markerIcon = (fill) => {
+    if (fill <= 40) return makeImgIcon('/Empty-DustBin.png');
+    if (fill <= 75) return makeImgIcon('/Half-filled-Dustbin.png');
+    return makeImgIcon('/Filled-Dustbin.png');
+};
+
+function MapClickHandler({ enabled, onPick }) {
+    useMapEvents({
+        click(e) {
+            if (enabled) onPick(e.latlng);
+        },
+    });
+    return null;
+}
 
 function BinMap() {
     const dispatch = useDispatch();
@@ -14,11 +53,15 @@ function BinMap() {
 
     const [binFilter, setBinFilter] = useState('all');
     const [bins, setBins] = useState([]);
+    const [villages, setVillages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [pendingPoint, setPendingPoint] = useState(null);
+    const [newBin, setNewBin] = useState({ label: '', village_id: '', location_address: '' });
 
     useEffect(() => {
         loadBins();
+        loadVillages();
     }, [role, adminId]);
 
     const loadBins = async () => {
@@ -28,9 +71,14 @@ function BinMap() {
 
             // For panchayat_admin role, filter by their own admin ID as panchayat_id
             // For other roles, fetch all bins they can see
-            const panchayatId = role === 'panchayat_admin' ? adminId : null;
-            const data = await fetchBins(panchayatId);
-            setBins(data);
+            const filters = role === 'panchayat_admin' ? { assigned_panchayat_id: adminId } : {};
+            const data = await fetchBins(filters);
+            const normalized = (data || []).map((bin) => ({
+                ...bin,
+                fillLevel: Number(bin.fill_level ?? 0),
+                location: bin.location_address || 'N/A',
+            }));
+            setBins(normalized);
         } catch (err) {
             console.error('Error loading bins:', err);
             setError(err.message || 'Failed to fetch bins');
@@ -40,18 +88,46 @@ function BinMap() {
         }
     };
 
-    const getStatusColor = (status) => {
-        return FILL_STATUS_COLOR[status] || '#CCCCCC';
+    const loadVillages = async () => {
+        try {
+            const { data } = await api.get('/admin/villages');
+            setVillages(data?.villages || []);
+        } catch (_e) {
+            setVillages([]);
+        }
     };
 
-    const getStatusLabel = (status) => {
-        return status.charAt(0).toUpperCase() + status.slice(1);
+    const handleCreateBin = async () => {
+        if (!pendingPoint || !newBin.label) {
+            showToast('Select a point and enter bin label', 'error');
+            return;
+        }
+        try {
+            await createBin({
+                label: newBin.label,
+                location_lat: pendingPoint.lat,
+                location_lng: pendingPoint.lng,
+                location_address: newBin.location_address || null,
+                village_id: newBin.village_id || null,
+                assigned_panchayat_id: adminId,
+                fill_level: 0,
+            });
+            setPendingPoint(null);
+            setNewBin({ label: '', village_id: '', location_address: '' });
+            await loadBins();
+            showToast('Dustbin created successfully', 'success');
+        } catch (err) {
+            showToast('Failed to create dustbin: ' + err.message, 'error');
+        }
     };
 
-    const filteredBins =
-        binFilter === 'all'
-            ? bins
-            : bins.filter((bin) => bin.status === binFilter);
+    const getStatusLabel = (fill) => (fill <= 40 ? 'Empty / Low' : fill <= 75 ? 'Half Full' : 'Full');
+
+    const filteredBins = binFilter === 'all' ? bins : bins.filter((bin) => statusByFill(bin.fillLevel) === binFilter);
+
+    const mapCenter = filteredBins[0]?.location_lat && filteredBins[0]?.location_lng
+        ? [filteredBins[0].location_lat, filteredBins[0].location_lng]
+        : [19.075, 72.877];
 
     if (loading) {
         return (
@@ -105,21 +181,17 @@ function BinMap() {
                                 style={{
                                     padding: '12px',
                                     marginBottom: '8px',
-                                    border: `1px solid ${getStatusColor(bin.status)}30`,
+                                    border: `1px solid ${colorByFill(bin.fillLevel)}30`,
                                     borderRadius: '8px',
-                                    backgroundColor: `${getStatusColor(bin.status)}10`,
+                                    backgroundColor: `${colorByFill(bin.fillLevel)}10`,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = `${getStatusColor(
-                                        bin.status
-                                    )}20`;
+                                    e.currentTarget.style.backgroundColor = `${colorByFill(bin.fillLevel)}20`;
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = `${getStatusColor(
-                                        bin.status
-                                    )}10`;
+                                    e.currentTarget.style.backgroundColor = `${colorByFill(bin.fillLevel)}10`;
                                 }}
                             >
                                 <div
@@ -134,12 +206,12 @@ function BinMap() {
                                     <span
                                         className="admin-badge"
                                         style={{
-                                            backgroundColor: getStatusColor(bin.status),
+                                            backgroundColor: colorByFill(bin.fillLevel),
                                             color: '#fff',
                                             fontSize: '10px',
                                         }}
                                     >
-                                        {getStatusLabel(bin.status)}
+                                        {getStatusLabel(bin.fillLevel)}
                                     </span>
                                 </div>
                                 <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '6px' }}>
@@ -150,7 +222,7 @@ function BinMap() {
                                         style={{
                                             height: '100%',
                                             width: `${bin.fillLevel}%`,
-                                            backgroundColor: getStatusColor(bin.status),
+                                            backgroundColor: colorByFill(bin.fillLevel),
                                             transition: 'width 0.3s ease',
                                         }}
                                     ></div>
@@ -168,31 +240,32 @@ function BinMap() {
                     <h2 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>
                         Map View
                     </h2>
-                    <div
-                        style={{
-                            backgroundColor: '#F0F0F0',
-                            borderRadius: '8px',
-                            height: '500px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexDirection: 'column',
-                            gap: '16px',
-                        }}
-                    >
-                        <div style={{ fontSize: '48px' }}>🗺️</div>
-                        <div style={{ textAlign: 'center', color: 'var(--admin-muted)' }}>
-                            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
-                                Map Integration
-                            </div>
-                            <div style={{ fontSize: '12px' }}>
-                                Leaflet map with OpenStreetMap would render here
-                            </div>
-                            <div style={{ fontSize: '12px', marginTop: '8px' }}>
-                                {filteredBins.length} bin(s) visible
-                            </div>
-                        </div>
+                    <div style={{ border: '1px solid var(--admin-border)', borderRadius: '8px', height: '500px', overflow: 'hidden' }}>
+                        <MapContainer center={mapCenter} zoom={14} style={{ height: '100%', width: '100%' }}>
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+                            <MapClickHandler enabled={role === 'panchayat_admin'} onPick={setPendingPoint} />
+                            {filteredBins.map((bin) => (
+                                <Marker key={bin.id} position={[bin.location_lat, bin.location_lng]} icon={markerIcon(bin.fillLevel)}>
+                                    <Popup>
+                                        <div><strong>{bin.label}</strong><br />{getStatusLabel(bin.fillLevel)} ({bin.fillLevel}%)</div>
+                                    </Popup>
+                                </Marker>
+                            ))}
+                            {pendingPoint && <Marker position={[pendingPoint.lat, pendingPoint.lng]} icon={makeImgIcon('/Half-filled-Dustbin.png')} />}
+                        </MapContainer>
                     </div>
+
+                    {role === 'panchayat_admin' && pendingPoint && (
+                        <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
+                            <input className="admin-form-input" placeholder="Bin label" value={newBin.label} onChange={(e) => setNewBin({ ...newBin, label: e.target.value })} />
+                            <input className="admin-form-input" placeholder="Address" value={newBin.location_address} onChange={(e) => setNewBin({ ...newBin, location_address: e.target.value })} />
+                            <select className="admin-form-select" value={newBin.village_id} onChange={(e) => setNewBin({ ...newBin, village_id: e.target.value })}>
+                                <option value="">Select village (optional)</option>
+                                {villages.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
+                            <button className="admin-btn-primary" onClick={handleCreateBin}>Create Dustbin Here</button>
+                        </div>
+                    )}
 
                     {/* Legend */}
                     <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--admin-border)' }}>
@@ -211,14 +284,11 @@ function BinMap() {
                                     key={item.status}
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}
                                 >
-                                    <div
-                                        style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '2px',
-                                            backgroundColor: getStatusColor(item.status),
-                                        }}
-                                    ></div>
+                                    <img
+                                        src={item.status === 'empty' || item.status === 'low' ? '/Empty-DustBin.png' : item.status === 'medium' ? '/Half-filled-Dustbin.png' : '/Filled-Dustbin.png'}
+                                        alt={item.label}
+                                        style={{ width: '14px', height: '14px' }}
+                                    />
                                     {item.label}
                                 </div>
                             ))}
@@ -258,7 +328,7 @@ function BinMap() {
                                                 style={{
                                                     height: '100%',
                                                     width: `${bin.fillLevel}%`,
-                                                    backgroundColor: getStatusColor(bin.status),
+                                                    backgroundColor: colorByFill(bin.fillLevel),
                                                 }}
                                             ></div>
                                         </div>
@@ -270,11 +340,11 @@ function BinMap() {
                                         <span
                                             className="admin-badge"
                                             style={{
-                                                backgroundColor: getStatusColor(bin.status),
+                                                backgroundColor: colorByFill(bin.fillLevel),
                                                 color: '#fff',
                                             }}
                                         >
-                                            {getStatusLabel(bin.status)}
+                                            {getStatusLabel(bin.fillLevel)}
                                         </span>
                                     </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>

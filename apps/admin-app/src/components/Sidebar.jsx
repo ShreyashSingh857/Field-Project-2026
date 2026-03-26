@@ -81,6 +81,15 @@ function Sidebar() {
         (item) => item.roles.includes('all') || item.roles.includes(role)
     );
 
+        const roleBadge = {
+            panchayat_admin: { bg: '#E8F5E9', text: '#2E7D32', label: 'Panchayat Admin' },
+            gram_panchayat: { bg: '#E3F2FD', text: '#1565C0', label: 'Gram Panchayat' },
+            block_samiti: { bg: '#FFF8E1', text: '#F57F17', label: 'Block Samiti' },
+            zilla_parishad: { bg: '#FCE4EC', text: '#880E4F', label: 'Zilla Parishad' },
+        }[role] || { bg: '#f3f4f6', text: '#374151', label: 'Admin' };
+
+        const hierarchy = ['zilla_parishad', 'block_samiti', 'gram_panchayat', 'panchayat_admin'];
+
     const handleLogout = () => {
         dispatch(logout());
         window.location.href = '/login';
@@ -94,6 +103,16 @@ function Sidebar() {
                 <div className="admin-sidebar-role-value">
                     {role?.replace(/_/g, ' ').toUpperCase()}
                 </div>
+                                <div style={{ marginTop: '10px', display: 'inline-block', padding: '4px 10px', borderRadius: '999px', background: roleBadge.bg, color: roleBadge.text, fontSize: '12px', fontWeight: 700 }}>
+                                    {roleBadge.label}
+                                </div>
+                                <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--admin-muted)' }}>
+                                    {hierarchy.map((r) => (
+                                        <div key={r} style={{ fontWeight: role === r ? 700 : 500, color: role === r ? 'var(--admin-primary)' : 'var(--admin-muted)' }}>
+                                            {r.replace(/_/g, ' ')}
+                                        </div>
+                                    ))}
+                                </div>
                 {admin?.jurisdiction_name && (
                     <>
                         <div className="admin-sidebar-role-label" style={{ marginTop: '12px' }}>

@@ -175,4 +175,8 @@ const tasksSlice = createSlice({
 });
 
 export const { taskUpserted, taskDeleted, binPatched } = tasksSlice.actions;
+export const selectTasks = (state) => state.tasks.items;
+export const selectCurrentTask = (state) => state.tasks.selectedTask;
+export const selectTasksLoading = (state) => state.tasks.loading;
+export const selectTasksError = (state) => state.tasks.error;
 export default tasksSlice.reducer;

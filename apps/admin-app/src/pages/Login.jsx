@@ -15,6 +15,14 @@ function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loginRole, setLoginRole] = useState('panchayat_admin');
+
+    const roleOptions = [
+        { key: 'panchayat_admin', label: 'Login as Panchayat Admin' },
+        { key: 'gram_panchayat', label: 'Login as Gram Panchayat' },
+        { key: 'block_samiti', label: 'Login as Block Samhiti' },
+        { key: 'zilla_parishad', label: 'Login as Jila Parishadh' },
+    ];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -91,6 +99,23 @@ function Login() {
 
                 {/* Form */}
                 <form onSubmit={handleSubmit}>
+                    <div className="admin-form-group">
+                        <label className="admin-form-label">Select Login Role</label>
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                            {roleOptions.map((option) => (
+                                <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setLoginRole(option.key)}
+                                    className={loginRole === option.key ? 'admin-btn-primary admin-btn-sm' : 'admin-btn-outline admin-btn-sm'}
+                                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Email Input */}
                     <div className="admin-form-group">
                         <label className="admin-form-label required">Email</label>
@@ -151,24 +176,6 @@ function Login() {
                     </button>
                 </form>
 
-                {/* Demo Credentials Info */}
-                <div
-                    style={{
-                        marginTop: '24px',
-                        padding: '12px',
-                        backgroundColor: '#F5F5F5',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        color: 'var(--admin-muted)',
-                        lineHeight: '1.5',
-                    }}
-                >
-                    <strong style={{ color: 'var(--admin-text)' }}>Demo Credentials:</strong>
-                    <br />
-                    Email: demo@gramwaste.local
-                    <br />
-                    Password: Demo@123456
-                </div>
             </div>
         </div>
     );

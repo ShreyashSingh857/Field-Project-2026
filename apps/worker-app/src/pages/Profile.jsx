@@ -39,6 +39,7 @@ const Profile = () => {
           </div>
           <h2 className="text-[20px] font-bold text-[var(--sm-text)] m-0">{worker?.name || 'Worker'}</h2>
           <p className="text-[14px] text-[var(--sm-text-muted)] font-mono mt-1">{worker?.employee_id || 'N/A'}</p>
+          <p className="text-[12px] text-[var(--sm-text-muted)] mt-1">Village: {worker?.village_id || 'N/A'}</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-left">
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">

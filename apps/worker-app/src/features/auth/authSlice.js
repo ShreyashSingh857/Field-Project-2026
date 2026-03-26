@@ -14,9 +14,9 @@ export const bootstrapSession = createAsyncThunk('auth/bootstrapSession', async 
 
 export const login = createAsyncThunk(
   'auth/login',
-  async ({ email, password }, { rejectWithValue }) => {
+  async ({ employee_id, password }, { rejectWithValue }) => {
     try {
-      const data = await loginWorkerWithSupabase(email, password);
+      const data = await loginWorkerWithSupabase(employee_id, password);
       localStorage.setItem('worker_token', data.token);
       return data;
     } catch (err) {
