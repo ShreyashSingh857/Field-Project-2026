@@ -147,7 +147,16 @@ export default function BinsMapPage() {
 
         {/* ── Map ── */}
         <div className="relative h-[calc(100vh-76px)] w-full">
-          <MapContainer center={center} zoom={zoom} style={{ height: '100%', width: '100%' }} zoomControl>
+          <MapContainer
+            center={center}
+            zoom={zoom}
+            style={{ height: '100%', width: '100%', touchAction: 'none' }}
+            zoomControl
+            dragging
+            touchZoom
+            doubleClickZoom
+            scrollWheelZoom
+          >
             <ChangeView center={center} zoom={zoom} triggered={geoTriggered} />
             <TileLayer
               attribution="&copy; <a href='https://openstreetmap.org'>OpenStreetMap</a>"

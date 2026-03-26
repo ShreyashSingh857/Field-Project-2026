@@ -16,6 +16,17 @@ export async function startTaskRequest(taskId) {
 }
 
 export async function completeTaskRequest(taskId, payload = {}) {
+  const hasFiles = payload?.beforePhotoFile || payload?.afterPhotoFile || payload?.proofPhotoFile;
+  if (hasFiles) {
+    const formData = new FormData();
+    if (payload.beforePhotoFile) formData.append('before_photo', payload.beforePhotoFile);
+    if (payload.afterPhotoFile) formData.append('after_photo', payload.afterPhotoFile);
+    if (payload.proofPhotoFile) formData.append('proof_photo', payload.proofPhotoFile);
+    const { data } = await api.patch(`/tasks/${taskId}/complete`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  }
   const { data } = await api.patch(`/tasks/${taskId}/complete`, payload);
   return data;
 }

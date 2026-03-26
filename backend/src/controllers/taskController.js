@@ -9,7 +9,11 @@ import {
 } from '../models/taskModel.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
-export const completeTaskUpload = upload.single('proof_photo');
+export const completeTaskUpload = upload.fields([
+	{ name: 'before_photo', maxCount: 1 },
+	{ name: 'after_photo', maxCount: 1 },
+	{ name: 'proof_photo', maxCount: 1 },
+]);
 
 function getWorkerContext(req) {
 	const userMetadata = req.user?.user_metadata || {};
@@ -30,7 +34,8 @@ async function uploadTaskProof(file, taskId) {
 		throw new Error(error.message || 'Failed to upload proof photo');
 	}
 
-	return safeName;
+	const publicUrl = supabaseAdmin.storage.from('task-proofs').getPublicUrl(safeName).data?.publicUrl;
+	return publicUrl || safeName;
 }
 
 export async function listTasks(req, res) {
@@ -92,8 +97,22 @@ export async function completeTask(req, res) {
 		}
 
 		const existingTask = await getTaskById(req.params.id);
-		const uploadedPath = await uploadTaskProof(req.file, req.params.id);
-		const proofPhotoUrl = req.body?.proof_photo_url || uploadedPath;
+		const beforeFile = req.files?.before_photo?.[0] || null;
+		const afterFile = req.files?.after_photo?.[0] || null;
+		const legacyFile = req.files?.proof_photo?.[0] || null;
+
+		const beforePhotoUrl = await uploadTaskProof(beforeFile, req.params.id);
+		const afterPhotoUrl = await uploadTaskProof(afterFile, req.params.id);
+		const legacyProofUrl = await uploadTaskProof(legacyFile, req.params.id);
+
+		let proofPhotoUrl = req.body?.proof_photo_url || legacyProofUrl;
+		if (beforePhotoUrl || afterPhotoUrl) {
+			proofPhotoUrl = JSON.stringify({
+				before_photo_url: beforePhotoUrl || null,
+				after_photo_url: afterPhotoUrl || null,
+				proof_photo_url: legacyProofUrl || null,
+			});
+		}
 		const task = await completeTaskById({
 			taskId: req.params.id,
 			workerId,
@@ -119,6 +138,8 @@ export async function completeTask(req, res) {
 
 export async function createTaskByAdmin(req, res) {
 	try {
+		const assignedWorkerId = req.body?.assigned_worker_id || null;
+		const sourceIssueId = req.body?.source_issue_id || null;
 		const payload = {
 			type: req.body?.type || 'other',
 			title: req.body?.title,
@@ -126,13 +147,37 @@ export async function createTaskByAdmin(req, res) {
 			location_lat: req.body?.location_lat,
 			location_lng: req.body?.location_lng,
 			location_address: req.body?.location_address || null,
-			status: 'pending',
+			status: assignedWorkerId ? 'assigned' : 'pending',
 			priority: req.body?.priority || 2,
+			assigned_worker_id: assignedWorkerId,
 			village_id: req.body?.village_id || null,
 			bin_id: req.body?.bin_id || null,
+			source_issue_id: sourceIssueId,
 			due_at: req.body?.due_at || null,
 			created_by_admin_id: req.admin.id,
 		};
+
+		if (sourceIssueId) {
+			const { data: issue } = await supabaseAdmin
+				.from('issue_reports')
+				.select('description,location_lat,location_lng,location_address,village_id,bin_id')
+				.eq('id', sourceIssueId)
+				.maybeSingle();
+
+			if (issue) {
+				payload.title = payload.title || issue.description?.slice(0, 120) || 'Issue Resolution Task';
+				payload.description = payload.description || issue.description || null;
+				payload.location_lat = payload.location_lat ?? issue.location_lat;
+				payload.location_lng = payload.location_lng ?? issue.location_lng;
+				payload.location_address = payload.location_address || issue.location_address || null;
+				payload.village_id = payload.village_id || issue.village_id || null;
+				payload.bin_id = payload.bin_id || issue.bin_id || null;
+			}
+		}
+
+		if (!payload.title || payload.location_lat == null || payload.location_lng == null) {
+			return res.status(400).json({ error: 'title, location_lat and location_lng are required' });
+		}
 
 		const { data, error } = await supabaseAdmin.from('tasks').insert(payload).select('*').single();
 		if (error) throw error;

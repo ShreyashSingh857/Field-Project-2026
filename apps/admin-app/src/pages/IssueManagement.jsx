@@ -4,7 +4,7 @@ import { X, Eye, Loader, CheckCircle, XCircle } from 'lucide-react';
 import { selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
 import { fetchIssues, convertIssueToTask, rejectIssue } from '../features/issues/issueAPI';
-import supabase from '../services/supabaseClient';
+import api from '../services/axiosInstance';
 import { PRIORITIES, TASK_TYPES, formatDate } from '../utils/constants';
 
 function IssueManagement() {
@@ -49,14 +49,8 @@ function IssueManagement() {
 
     const loadWorkers = async () => {
         try {
-            const { data, error: err } = await supabase
-                .from('workers')
-                .select('id, employee_id, name, is_active')
-                .eq('created_by_admin_id', adminId)
-                .eq('is_active', true);
-
-            if (err) throw err;
-            setWorkers(data || []);
+            const { data } = await api.get('/workers');
+            setWorkers((data?.workers || []).filter((w) => w.is_active));
         } catch (err) {
             console.error('Error loading workers:', err);
         }
@@ -73,11 +67,12 @@ function IssueManagement() {
         try {
             if (selectedIssue) {
                 await convertIssueToTask(
-                    selectedIssue.id,
+                    selectedIssue,
                     {
                         type: convertFormData.type,
                         priority: convertFormData.priority,
                         assigned_worker_id: convertFormData.assigned_worker_id || null,
+                        due_at: convertFormData.due_at,
                     },
                     adminId
                 );
@@ -406,6 +401,22 @@ function IssueManagement() {
                                                     </option>
                                                 ))}
                                             </select>
+                                        </div>
+
+                                        <div className="admin-form-group">
+                                            <label className="admin-form-label required">Due Date</label>
+                                            <input
+                                                type="datetime-local"
+                                                className="admin-form-input"
+                                                value={convertFormData.due_at}
+                                                onChange={(e) =>
+                                                    setConvertFormData({
+                                                        ...convertFormData,
+                                                        due_at: e.target.value,
+                                                    })
+                                                }
+                                                required
+                                            />
                                         </div>
 
                                         <button type="submit" className="admin-btn-primary" style={{ width: '100%' }}>

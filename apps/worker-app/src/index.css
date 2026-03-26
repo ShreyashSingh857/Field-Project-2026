@@ -11,6 +11,7 @@
   --sm-primary: #2E7D32;
   --sm-text: #1A1A1A;
   --sm-text-muted: #666666;
+  --sm-bottom-nav-height: 72px;
 }
 
 body {
@@ -28,7 +29,7 @@ body {
   justify-content: space-between;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 1200;
   color: white;
 }
 
@@ -107,7 +108,8 @@ body {
   background: #fff;
   border-top: 1px solid #e0e0e0;
   display: flex;
-  z-index: 30;
+  z-index: 2000;
+  min-height: var(--sm-bottom-nav-height);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .sm-nav-item {
