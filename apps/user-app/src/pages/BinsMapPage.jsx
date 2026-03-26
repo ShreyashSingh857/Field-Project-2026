@@ -8,6 +8,20 @@ import { useTranslation } from 'react-i18next';
 import { fetchBins, fetchRecyclingCenters } from '../features/bins/binSlice';
 import Loader from '../components/Loader';
 
+/* ─── Leaflet StrictMode Patch ──────────────────────────────── */
+// Bypasses React 18's Double-Invoke and reappearLayoutEffects bugs
+if (!L.Map.prototype._patchedInitContainer) {
+  const _originalInit = L.Map.prototype._initContainer;
+  L.Map.prototype._initContainer = function (id) {
+    const container = L.DomUtil.get(id);
+    if (container && container._leaflet_id) {
+      container._leaflet_id = null;
+    }
+    _originalInit.call(this, id);
+  };
+  L.Map.prototype._patchedInitContainer = true;
+}
+
 /* ─── Custom PNG icons ─────────────────────────────────────── */
 const makeImgIcon = (src, size = [40, 40]) =>
   L.icon({ iconUrl: src, iconSize: size, iconAnchor: [size[0] / 2, size[1]], popupAnchor: [0, -(size[1] + 4)] });

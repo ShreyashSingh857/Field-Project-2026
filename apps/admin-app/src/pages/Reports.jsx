@@ -4,6 +4,14 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { Download, Loader } from 'lucide-react';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
+import {
+    getTaskCompletionByDay,
+    getBinFillHistory,
+    getWorkerPerformance,
+    getIssueResolutionStats,
+    getBinStatusDistribution,
+    getAggregatePerformanceByPanchayat,
+} from '../features/reports/reportAPI';
 
 function Reports() {
     const dispatch = useDispatch();
@@ -15,55 +23,76 @@ function Reports() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Mock data for panchayat_admin
-    const [taskCompletionData] = useState([
-        { day: 'Mon', completed: 8, pending: 2 },
-        { day: 'Tue', completed: 12, pending: 1 },
-        { day: 'Wed', completed: 10, pending: 3 },
-        { day: 'Thu', completed: 15, pending: 2 },
-        { day: 'Fri', completed: 11, pending: 4 },
-        { day: 'Sat', completed: 9, pending: 1 },
-        { day: 'Sun', completed: 6, pending: 2 },
-    ]);
-
-    const [binFillData] = useState([
-        { day: 'Mon', bin1: 45, bin2: 38, bin3: 52 },
-        { day: 'Tue', bin1: 65, bin2: 48, bin3: 70 },
-        { day: 'Wed', bin1: 55, bin2: 60, bin3: 72 },
-        { day: 'Thu', bin1: 75, bin2: 70, bin3: 85 },
-        { day: 'Fri', bin1: 60, bin2: 65, bin3: 80 },
-        { day: 'Sat', bin1: 50, bin2: 55, bin3: 75 },
-        { day: 'Sun', bin1: 40, bin2: 45, bin3: 60 },
-    ]);
-
-    const [workerPerformanceData] = useState([
-        { name: 'Rajesh Kumar', assigned: 45, completed: 42, rate: 93.3 },
-        { name: 'Priya Singh', assigned: 52, completed: 50, rate: 96.2 },
-        { name: 'Amit Sharma', assigned: 38, completed: 35, rate: 92.1 },
-        { name: 'Neha Gupta', assigned: 41, completed: 39, rate: 95.1 },
-    ]);
-
-    const [issueStatusData] = useState([
-        { name: 'Resolved', value: 156, fill: '#3B6D11' },
-        { name: 'Open', value: 23, fill: '#854F0B' },
-        { name: 'Rejected', value: 8, fill: '#A32D2D' },
-    ]);
+    const [taskCompletionData, setTaskCompletionData] = useState([]);
+    const [binFillData, setBinFillData] = useState([]);
+    const [workerPerformanceData, setWorkerPerformanceData] = useState([]);
+    const [issueStatusData, setIssueStatusData] = useState([]);
+    const [issueStats, setIssueStats] = useState({ resolutionRate: 0, totalIssues: 0 });
+    const [panchayatPerformance, setPanchayatPerformance] = useState([]);
+    const [binStatusData, setBinStatusData] = useState([]);
 
     useEffect(() => {
         fetchReportData();
     }, [role, adminId, dateRange]);
+
+    const getDateRange = () => {
+        const end = new Date();
+        const start = new Date();
+
+        if (dateRange === 'week') {
+            start.setDate(end.getDate() - 7);
+        } else if (dateRange === 'month') {
+            start.setMonth(end.getMonth() - 1);
+        } else if (dateRange === 'custom') {
+            // For custom, would use separate date pickers
+            start.setDate(end.getDate() - 30);
+        }
+
+        return {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+        };
+    };
 
     const fetchReportData = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const { startDate, endDate } = getDateRange();
+
+            if (role === 'panchayat_admin') {
+                // Fetch data for panchayat_admin
+                const [taskData, binData, workerData, issueData] = await Promise.all([
+                    getTaskCompletionByDay(startDate, endDate, adminId),
+                    getBinFillHistory(startDate, endDate),
+                    getWorkerPerformance(startDate, endDate, adminId),
+                    getIssueResolutionStats(startDate, endDate, adminId),
+                ]);
+
+                setTaskCompletionData(taskData);
+                setBinFillData(binData);
+                setWorkerPerformanceData(workerData);
+                setIssueStatusData(issueData.data);
+                setIssueStats({
+                    resolutionRate: issueData.resolutionRate,
+                    totalIssues: issueData.totalIssues,
+                });
+            } else if (['gram_panchayat', 'block_samiti', 'zilla_parishad'].includes(role)) {
+                // Fetch data for higher roles
+                const [aggregateData, binDistribution] = await Promise.all([
+                    getAggregatePerformanceByPanchayat(startDate, endDate),
+                    getBinStatusDistribution(),
+                ]);
+
+                setPanchayatPerformance(aggregateData);
+                setBinStatusData(binDistribution);
+            }
 
             showToast('Report data loaded', 'success');
         } catch (err) {
-            setError('Failed to fetch report data');
+            console.error('Error fetching report data:', err);
+            setError('Failed to load report data');
             showToast('Failed to load report data', 'error');
         } finally {
             setLoading(false);
@@ -73,7 +102,7 @@ function Reports() {
     const handleExportCSV = () => {
         try {
             showToast('Export started - CSV file will download', 'success');
-            // Mock CSV export - would use actual API in production
+            // Would implement actual CSV export here
         } catch (err) {
             showToast('Failed to export CSV', 'error');
         }
@@ -237,14 +266,16 @@ function Reports() {
                                         Overall Resolution Rate
                                     </div>
                                     <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--admin-primary)' }}>
-                                        87.6%
+                                        {issueStats.resolutionRate}%
                                     </div>
                                 </div>
                                 <div style={{ marginBottom: '16px' }}>
                                     <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
                                         Total Issues
                                     </div>
-                                    <div style={{ fontSize: '24px', fontWeight: '700' }}>187</div>
+                                    <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                                        {issueStats.totalIssues}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -259,67 +290,68 @@ function Reports() {
                         <h2 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>
                             Aggregate Performance by Gram Panchayat
                         </h2>
-                        <p style={{ color: 'var(--admin-muted)', marginBottom: '16px' }}>
-                            District-wide aggregate data would be displayed here for {role.replace(/_/g, ' ').toUpperCase()}.
-                        </p>
-                        <div className="admin-table-wrap">
-                            <table className="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>Gram Panchayat</th>
-                                        <th>Total Tasks</th>
-                                        <th>Completed</th>
-                                        <th>SLA Compliance %</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Gokul Nagar</td>
-                                        <td>156</td>
-                                        <td>142</td>
-                                        <td><strong style={{ color: 'var(--admin-primary)' }}>91%</strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Ram Vihar</td>
-                                        <td>134</td>
-                                        <td>128</td>
-                                        <td><strong style={{ color: 'var(--admin-primary)' }}>95%</strong></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        {panchayatPerformance.length === 0 ? (
+                            <p style={{ color: 'var(--admin-muted)', marginBottom: '16px' }}>
+                                No performance data available for the selected date range.
+                            </p>
+                        ) : (
+                            <div className="admin-table-wrap">
+                                <table className="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Gram Panchayat</th>
+                                            <th>Total Tasks</th>
+                                            <th>Completed</th>
+                                            <th>SLA Compliance %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {panchayatPerformance.map((panchayat, idx) => (
+                                            <tr key={idx}>
+                                                <td>{panchayat.name}</td>
+                                                <td>{panchayat.total_tasks}</td>
+                                                <td>{panchayat.completed}</td>
+                                                <td>
+                                                    <strong style={{ color: 'var(--admin-primary)' }}>
+                                                        {panchayat.sla_compliance}%
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
                     <div className="admin-panel">
                         <h2 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>
                             District-wide Bin Status
                         </h2>
-                        <ResponsiveContainer width="100%" height={250}>
-                            <PieChart>
-                                <Pie
-                                    data={[
-                                        { name: 'Empty', value: 245, fill: '#3B6D11' },
-                                        { name: 'Low', value: 156, fill: '#FFA500' },
-                                        { name: 'Medium', value: 234, fill: '#F4A460' },
-                                        { name: 'High', value: 145, fill: '#854F0B' },
-                                        { name: 'Full/Overflow', value: 67, fill: '#A32D2D' },
-                                    ]}
-                                    cx="50%"
-                                    cy="50%"
-                                    labelLine={false}
-                                    label={(entry) => `${entry.name}: ${entry.value}`}
-                                    outerRadius={80}
-                                    dataKey="value"
-                                >
-                                    <Cell fill="#3B6D11" />
-                                    <Cell fill="#FFA500" />
-                                    <Cell fill="#F4A460" />
-                                    <Cell fill="#854F0B" />
-                                    <Cell fill="#A32D2D" />
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
+                        {binStatusData.length === 0 ? (
+                            <p style={{ color: 'var(--admin-muted)' }}>
+                                No bins available in the system.
+                            </p>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={250}>
+                                <PieChart>
+                                    <Pie
+                                        data={binStatusData}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        label={(entry) => `${entry.name}: ${entry.value}`}
+                                        outerRadius={80}
+                                        dataKey="value"
+                                    >
+                                        {binStatusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </>
             )}

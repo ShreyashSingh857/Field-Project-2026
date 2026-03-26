@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Loader } from 'lucide-react';
-import { selectRole } from '../features/auth/authSlice';
+import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
 import { FILL_STATUS_COLOR } from '../utils/constants';
+import { fetchBins } from '../features/bins/binAPI';
 
 function BinMap() {
     const dispatch = useDispatch();
     const role = useSelector(selectRole);
+    const adminId = useSelector(selectAdminId);
     const { toast, showToast } = useToast();
 
     const [binFilter, setBinFilter] = useState('all');
@@ -16,60 +18,21 @@ function BinMap() {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        fetchBins();
-    }, [role]);
+        loadBins();
+    }, [role, adminId]);
 
-    const fetchBins = async () => {
+    const loadBins = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            // Mock data
-            setBins([
-                {
-                    id: 1,
-                    label: 'Bin-001',
-                    location: 'Market Square',
-                    fillLevel: 85,
-                    status: 'high',
-                    lastUpdated: '5 min ago',
-                },
-                {
-                    id: 2,
-                    label: 'Bin-002',
-                    location: 'Ward 3',
-                    fillLevel: 100,
-                    status: 'overflow',
-                    lastUpdated: '2 min ago',
-                },
-                {
-                    id: 3,
-                    label: 'Bin-003',
-                    location: 'Park Area',
-                    fillLevel: 45,
-                    status: 'medium',
-                    lastUpdated: '10 min ago',
-                },
-                {
-                    id: 4,
-                    label: 'Bin-004',
-                    location: 'Residential Area',
-                    fillLevel: 20,
-                    status: 'low',
-                    lastUpdated: '15 min ago',
-                },
-                {
-                    id: 5,
-                    label: 'Bin-005',
-                    location: 'Main Street',
-                    fillLevel: 0,
-                    status: 'empty',
-                    lastUpdated: '30 min ago',
-                },
-            ]);
-
-            showToast('Bins loaded successfully', 'success');
+            // For panchayat_admin role, filter by their own admin ID as panchayat_id
+            // For other roles, fetch all bins they can see
+            const panchayatId = role === 'panchayat_admin' ? adminId : null;
+            const data = await fetchBins(panchayatId);
+            setBins(data);
         } catch (err) {
+            console.error('Error loading bins:', err);
             setError(err.message || 'Failed to fetch bins');
             showToast('Failed to load bins', 'error');
         } finally {
@@ -284,7 +247,11 @@ function BinMap() {
                             {bins.map((bin) => (
                                 <tr key={bin.id}>
                                     <td><strong>{bin.label}</strong></td>
-                                    <td>{bin.location}</td>
+                                    <td>
+                                        {bin.location_lat && bin.location_lng
+                                            ? `${bin.location_lat.toFixed(4)}, ${bin.location_lng.toFixed(4)}`
+                                            : 'Location TBD'}
+                                    </td>
                                     <td>
                                         <div style={{ width: '60px', height: '6px', backgroundColor: '#E0E0E0', borderRadius: '3px', overflow: 'hidden' }}>
                                             <div
@@ -311,7 +278,9 @@ function BinMap() {
                                         </span>
                                     </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        Today 10:30 AM
+                                        {bin.updated_at
+                                            ? new Date(bin.updated_at).toLocaleString('en-IN')
+                                            : 'Unknown'}
                                     </td>
                                 </tr>
                             ))}

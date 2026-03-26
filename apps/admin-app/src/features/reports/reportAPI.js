@@ -1,342 +1,304 @@
 import supabase from "../../services/supabaseClient";
 
 /**
- * Fetch reports with date range filtering
- * @param {string} adminId - Admin ID
- * @param {string} scope - Admin's jurisdiction scope
- * @param {Object} filters - Filters including startDate, endDate, reportType, status
- * @returns {Promise<Array>} List of reports
+ * Generate task completion data for a date range
+ * @param {string} startDate - Start date (ISO format)
+ * @param {string} endDate - End date (ISO format)
+ * @param {string} adminId - Admin ID for filtering created tasks
+ * @returns {Promise<Array>} Task completion by day
  */
-export const fetchReports = async (adminId, scope, filters = {}) => {
+export const getTaskCompletionByDay = async (startDate, endDate, adminId) => {
     try {
-        let query = supabase.from("reports").select(
-            `id,
-       report_id,
-       type,
-       title,
-       description,
-       generated_by,
-       data_type,
-       status,
-       file_url,
-       created_at,
-       start_date,
-       end_date,
-       record_count,
-       admin:admins(id, name, email, role)`
-        );
+        const { data, error } = await supabase
+            .from("tasks")
+            .select("status, created_at")
+            .gte("created_at", startDate)
+            .lte("created_at", endDate)
+            .eq("created_by", adminId);
 
-        // Apply scope filtering
-        if (scope && scope !== "national") {
-            query = query.eq("jurisdiction_scope", scope);
-        }
+        if (error) throw error;
 
-        // Date range filtering
-        if (filters.startDate) {
-            query = query.gte("start_date", filters.startDate);
-        }
-        if (filters.endDate) {
-            query = query.lte("end_date", filters.endDate);
-        }
-
-        // Report type filtering
-        if (filters.reportType) {
-            query = query.eq("type", filters.reportType);
-        }
-
-        // Status filtering
-        if (filters.status) {
-            query = query.eq("status", filters.status);
-        }
-
-        // Data type filtering (tasks, workers, issues, etc.)
-        if (filters.dataType) {
-            query = query.eq("data_type", filters.dataType);
-        }
-
-        const { data, error } = await query.order("created_at", {
-            ascending: false,
+        // Group by day
+        const dayMap = {};
+        (data || []).forEach((task) => {
+            const date = new Date(task.created_at);
+            const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+            if (!dayMap[dayName]) {
+                dayMap[dayName] = { completed: 0, pending: 0 };
+            }
+            if (task.status === "completed") {
+                dayMap[dayName].completed += 1;
+            } else if (task.status !== "cancelled") {
+                dayMap[dayName].pending += 1;
+            }
         });
 
-        if (error) throw error;
-        return data || [];
+        // Convert to array with days in order
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return days
+            .map((day) => ({
+                day,
+                completed: dayMap[day]?.completed || 0,
+                pending: dayMap[day]?.pending || 0,
+            }))
+            .filter((d) => d.completed > 0 || d.pending > 0);
     } catch (error) {
-        console.error("Error fetching reports:", error);
-        throw new Error(`Failed to fetch reports: ${error.message}`);
+        console.error("Error getting task completion data:", error);
+        throw new Error(`Failed to fetch task completion data: ${error.message}`);
     }
 };
 
 /**
- * Generate task completion report
- * @param {Object} params - Report parameters
- * @param {string} params.startDate - Start date (ISO format)
- * @param {string} params.endDate - End date (ISO format)
- * @param {string} adminId - Creating admin ID
- * @returns {Promise<Object>} Generated report
+ * Generate bin fill level history
+ * @param {string} startDate - Start date (ISO format)
+ * @param {string} endDate - End date (ISO format)
+ * @param {string} panchayatId - Panchayat ID (optional)
+ * @returns {Promise<Array>} Bin fill levels by day
  */
-export const generateTaskReport = async (
-    { startDate, endDate, zone, beat },
-    adminId
-) => {
+export const getBinFillHistory = async (startDate, endDate, panchayatId = null) => {
     try {
-        // Generate report ID
-        const { data: lastReport } = await supabase
-            .from("reports")
-            .select("report_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
+        let query = supabase
+            .from("bin_sensor_log")
+            .select("fill_level, created_at, bin:bins(id, label)");
 
-        let nextNumber = 1;
-        if (lastReport && lastReport.length > 0) {
-            const match = lastReport[0].report_id.match(/RPT-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
+        query = query.gte("created_at", startDate).lte("created_at", endDate);
+
+        if (panchayatId) {
+            // Would need to join with bins table, for now filter after fetch
         }
 
-        const reportId = `RPT-${String(nextNumber).padStart(5, "0")}`;
-
-        // Fetch task data
-        let taskQuery = supabase.from("tasks").select("id, status, completed_at");
-
-        if (startDate) {
-            taskQuery = taskQuery.gte("created_at", startDate);
-        }
-        if (endDate) {
-            taskQuery = taskQuery.lte("created_at", endDate);
-        }
-        if (zone) {
-            taskQuery = taskQuery.eq("zone", zone);
-        }
-        if (beat) {
-            taskQuery = taskQuery.eq("beat", beat);
-        }
-
-        const { data: tasks, error: tasksError } = await taskQuery;
-
-        if (tasksError) throw tasksError;
-
-        // Calculate metrics
-        const completedTasks = tasks.filter((t) => t.status === "completed").length;
-        const completionRate = tasks.length > 0 ?
-            Math.round((completedTasks / tasks.length) * 100) : 0;
-
-        const { data, error } = await supabase
-            .from("reports")
-            .insert([
-                {
-                    report_id: reportId,
-                    type: "task_completion",
-                    title: `Task Completion Report - ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`,
-                    description: `Task completion metrics for ${zone ? `zone ${zone}` : "all zones"} ${beat ? `beat ${beat}` : ""}`,
-                    data_type: "tasks",
-                    generated_by: adminId,
-                    start_date: startDate,
-                    end_date: endDate,
-                    record_count: tasks.length,
-                    status: "generated",
-                    metrics: {
-                        total_tasks: tasks.length,
-                        completed_tasks: completedTasks,
-                        completion_rate: completionRate,
-                        zone: zone || "all",
-                        beat: beat || "all",
-                    },
-                    created_at: new Date().toISOString(),
-                },
-            ])
-            .select()
-            .single();
+        const { data: logs, error } = await query;
 
         if (error) throw error;
-        return data;
+
+        // Get unique bins and group by day
+        const dayMap = {};
+        const binMap = {};
+
+        (logs || []).forEach((log) => {
+            const date = new Date(log.created_at);
+            const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+            const binLabel = log.bin?.label || `Bin-${log.bin?.id || "?"}`;
+
+            if (!dayMap[dayName]) {
+                dayMap[dayName] = {};
+            }
+            if (!dayMap[dayName][binLabel]) {
+                dayMap[dayName][binLabel] = [];
+            }
+
+            dayMap[dayName][binLabel].push(log.fill_level);
+            binMap[binLabel] = true;
+        });
+
+        // Average fill levels per bin per day
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const binLabels = Object.keys(binMap).sort();
+
+        return days
+            .map((day) => {
+                const entry = { day };
+                binLabels.forEach((binLabel, idx) => {
+                    const key = `bin${idx + 1}`;
+                    if (dayMap[day] && dayMap[day][binLabel]) {
+                        const avg =
+                            dayMap[day][binLabel].reduce((a, b) => a + b, 0) /
+                            dayMap[day][binLabel].length;
+                        entry[key] = Math.round(avg);
+                    } else {
+                        entry[key] = 0;
+                    }
+                });
+                return entry;
+            })
+            .filter((d) => Object.keys(d).length > 1);
     } catch (error) {
-        console.error("Error generating task report:", error);
-        throw new Error(`Failed to generate task report: ${error.message}`);
+        console.error("Error getting bin fill history:", error);
+        throw new Error(`Failed to fetch bin fill history: ${error.message}`);
     }
 };
 
 /**
- * Generate worker performance report
- * @param {Object} params - Report parameters
- * @param {string} params.startDate - Start date (ISO format)
- * @param {string} params.endDate - End date (ISO format)
- * @param {string} adminId - Creating admin ID
- * @returns {Promise<Object>} Generated report
+ * Generate worker performance data
+ * @param {string} startDate - Start date (ISO format)
+ * @param {string} endDate - End date (ISO format)
+ * @param {string} adminId - Admin ID (for filtering workers in jurisdiction)
+ * @returns {Promise<Array>} Worker performance metrics
  */
-export const generateWorkerReport = async (
-    { startDate, endDate, workerId },
-    adminId
-) => {
+export const getWorkerPerformance = async (startDate, endDate, adminId) => {
     try {
-        const { data: lastReport } = await supabase
-            .from("reports")
-            .select("report_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
+        // Get all workers created by this admin
+        const { data: workers, error: workersError } = await supabase
+            .from("workers")
+            .select("id, name")
+            .eq("created_by_admin_id", adminId);
 
-        let nextNumber = 1;
-        if (lastReport && lastReport.length > 0) {
-            const match = lastReport[0].report_id.match(/RPT-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
-        }
+        if (workersError) throw workersError;
 
-        const reportId = `RPT-${String(nextNumber).padStart(5, "0")}`;
+        // For each worker, count assigned and completed tasks
+        const performance = await Promise.all(
+            (workers || []).map(async (worker) => {
+                const { data: tasks, error: tasksError } = await supabase
+                    .from("tasks")
+                    .select("id, status")
+                    .eq("assigned_worker_id", worker.id)
+                    .gte("created_at", startDate)
+                    .lte("created_at", endDate);
 
-        // Fetch worker task data
-        let taskQuery = supabase
-            .from("tasks")
-            .select("id, status, completed_at");
+                if (tasksError) throw tasksError;
 
-        if (startDate) {
-            taskQuery = taskQuery.gte("created_at", startDate);
-        }
-        if (endDate) {
-            taskQuery = taskQuery.lte("created_at", endDate);
-        }
-        if (workerId) {
-            taskQuery = taskQuery.eq("assigned_to", workerId);
-        }
+                const assigned = tasks?.length || 0;
+                const completed = tasks?.filter((t) => t.status === "completed").length || 0;
+                const rate = assigned > 0 ? ((completed / assigned) * 100).toFixed(1) : 0;
 
-        const { data: tasks, error: tasksError } = await taskQuery;
+                return {
+                    name: worker.name,
+                    assigned,
+                    completed,
+                    rate: parseFloat(rate),
+                };
+            })
+        );
 
-        if (tasksError) throw tasksError;
-
-        // Get worker info if specific worker
-        let workerName = "All Workers";
-        if (workerId) {
-            const { data: worker } = await supabase
-                .from("workers")
-                .select("name, employee_id")
-                .eq("id", workerId)
-                .single();
-
-            if (worker) {
-                workerName = `${worker.name} (${worker.employee_id})`;
-            }
-        }
-
-        const completedTasks = tasks.filter((t) => t.status === "completed").length;
-        const completionRate = tasks.length > 0 ?
-            Math.round((completedTasks / tasks.length) * 100) : 0;
-
-        const { data, error } = await supabase
-            .from("reports")
-            .insert([
-                {
-                    report_id: reportId,
-                    type: "worker_performance",
-                    title: `Worker Performance Report - ${workerName}`,
-                    description: `Performance metrics for ${workerName} from ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`,
-                    data_type: "workers",
-                    generated_by: adminId,
-                    start_date: startDate,
-                    end_date: endDate,
-                    record_count: tasks.length,
-                    status: "generated",
-                    metrics: {
-                        worker_id: workerId || "all",
-                        total_tasks: tasks.length,
-                        completed_tasks: completedTasks,
-                        completion_rate: completionRate,
-                    },
-                    created_at: new Date().toISOString(),
-                },
-            ])
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
+        return performance.filter((p) => p.assigned > 0);
     } catch (error) {
-        console.error("Error generating worker report:", error);
-        throw new Error(`Failed to generate worker report: ${error.message}`);
+        console.error("Error getting worker performance:", error);
+        throw new Error(`Failed to fetch worker performance: ${error.message}`);
     }
 };
 
 /**
- * Generate issue resolution report
- * @param {Object} params - Report parameters
- * @param {string} params.startDate - Start date (ISO format)
- * @param {string} params.endDate - End date (ISO format)
- * @param {string} adminId - Creating admin ID
- * @returns {Promise<Object>} Generated report
+ * Generate issue resolution data
+ * @param {string} startDate - Start date (ISO format)
+ * @param {string} endDate - End date (ISO format)
+ * @param {string} adminId - Admin ID (for filtering issues)
+ * @returns {Promise<Object>} Issue status counts and resolution rate
  */
-export const generateIssueReport = async (
-    { startDate, endDate, category },
-    adminId
-) => {
+export const getIssueResolutionStats = async (startDate, endDate, adminId) => {
     try {
-        const { data: lastReport } = await supabase
-            .from("reports")
-            .select("report_id")
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-        let nextNumber = 1;
-        if (lastReport && lastReport.length > 0) {
-            const match = lastReport[0].report_id.match(/RPT-(\d+)/);
-            if (match) {
-                nextNumber = parseInt(match[1]) + 1;
-            }
-        }
-
-        const reportId = `RPT-${String(nextNumber).padStart(5, "0")}`;
-
-        let issueQuery = supabase.from("issues").select("id, status, category");
-
-        if (startDate) {
-            issueQuery = issueQuery.gte("created_at", startDate);
-        }
-        if (endDate) {
-            issueQuery = issueQuery.lte("created_at", endDate);
-        }
-        if (category) {
-            issueQuery = issueQuery.eq("category", category);
-        }
-
-        const { data: issues, error: issuesError } = await issueQuery;
-
-        if (issuesError) throw issuesError;
-
-        const convertedCount = issues.filter(
-            (i) => i.status === "converted_to_task"
-        ).length;
-        const rejectedCount = issues.filter((i) => i.status === "rejected").length;
-
-        const { data, error } = await supabase
-            .from("reports")
-            .insert([
-                {
-                    report_id: reportId,
-                    type: "issue_resolution",
-                    title: `Issue Resolution Report - ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`,
-                    description: `Issue resolution metrics for ${category || "all categories"}`,
-                    data_type: "issues",
-                    generated_by: adminId,
-                    start_date: startDate,
-                    end_date: endDate,
-                    record_count: issues.length,
-                    status: "generated",
-                    metrics: {
-                        total_issues: issues.length,
-                        converted_to_tasks: convertedCount,
-                        rejected: rejectedCount,
-                        category: category || "all",
-                    },
-                    created_at: new Date().toISOString(),
-                },
-            ])
-            .select()
-            .single();
+        const { data: issues, error } = await supabase
+            .from("issue_reports")
+            .select("id, status")
+            .gte("created_at", startDate)
+            .lte("created_at", endDate);
 
         if (error) throw error;
-        return data;
+
+        const resolved = issues?.filter((i) => i.status === "resolved").length || 0;
+        const open = issues?.filter((i) => i.status === "open").length || 0;
+        const rejected = issues?.filter((i) => i.status === "rejected").length || 0;
+        const total = issues?.length || 0;
+
+        const resolutionRate =
+            total > 0
+                ? Math.round(((resolved / total) * 100 * 10) / 10)
+                : 0;
+
+        return {
+            data: [
+                { name: "Resolved", value: resolved, fill: "#3B6D11" },
+                { name: "Open", value: open, fill: "#854F0B" },
+                { name: "Rejected", value: rejected, fill: "#A32D2D" },
+            ],
+            resolutionRate,
+            totalIssues: total,
+        };
     } catch (error) {
-        console.error("Error generating issue report:", error);
-        throw new Error(`Failed to generate issue report: ${error.message}`);
+        console.error("Error getting issue resolution stats:", error);
+        throw new Error(`Failed to fetch issue resolution data: ${error.message}`);
+    }
+};
+
+/**
+ * Generate bin status distribution for district-wide view
+ * @param {string} panchayatId - Panchayat ID (optional - for higher role views)
+ * @returns {Promise<Array>} Bin status counts
+ */
+export const getBinStatusDistribution = async (panchayatId = null) => {
+    try {
+        let query = supabase.from("bins").select("id, fill_status");
+
+        if (panchayatId) {
+            query = query.eq("assigned_panchayat_id", panchayatId);
+        }
+
+        const { data: bins, error } = await query;
+
+        if (error) throw error;
+
+        const statusCount = {
+            empty: 0,
+            low: 0,
+            medium: 0,
+            high: 0,
+            full: 0,
+            overflow: 0,
+        };
+
+        (bins || []).forEach((bin) => {
+            if (statusCount.hasOwnProperty(bin.fill_status)) {
+                statusCount[bin.fill_status] += 1;
+            }
+        });
+
+        return [
+            { name: "Empty", value: statusCount.empty, fill: "#3B6D11" },
+            { name: "Low", value: statusCount.low, fill: "#FFA500" },
+            { name: "Medium", value: statusCount.medium, fill: "#F4A460" },
+            { name: "High", value: statusCount.high, fill: "#854F0B" },
+            { name: "Full/Overflow", value: statusCount.full + statusCount.overflow, fill: "#A32D2D" },
+        ].filter((s) => s.value > 0);
+    } catch (error) {
+        console.error("Error getting bin status distribution:", error);
+        throw new Error(`Failed to fetch bin status data: ${error.message}`);
+    }
+};
+
+/**
+ * Generate aggregate performance by gram panchayat (for higher roles)
+ * @param {string} startDate - Start date (ISO format)
+ * @param {string} endDate - End date (ISO format)
+ * @returns {Promise<Array>} Performance metrics per panchayat
+ */
+export const getAggregatePerformanceByPanchayat = async (startDate, endDate) => {
+    try {
+        // Get all panchayats (admins with role panchayat_admin or gram panchayat)
+        const { data: panchayats, error: panchayatsError } = await supabase
+            .from("admins")
+            .select("id, jurisdiction_name")
+            .in("role", ["panchayat_admin", "gram_panchayat"]);
+
+        if (panchayatsError) throw panchayatsError;
+
+        const performance = await Promise.all(
+            (panchayats || []).map(async (panchayat) => {
+                // Get tasks created by or assigned in this jurisdiction
+                const { data: tasks, error: tasksError } = await supabase
+                    .from("tasks")
+                    .select("id, status")
+                    .eq("created_by", panchayat.id)
+                    .gte("created_at", startDate)
+                    .lte("created_at", endDate);
+
+                if (tasksError) throw tasksError;
+
+                const total = tasks?.length || 0;
+                const completed = tasks?.filter((t) => t.status === "completed").length || 0;
+                const slaCompliance = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                return {
+                    name: panchayat.jurisdiction_name,
+                    total_tasks: total,
+                    completed,
+                    sla_compliance: slaCompliance,
+                };
+            })
+        );
+
+        return performance.filter((p) => p.total_tasks > 0);
+    } catch (error) {
+        console.error("Error getting aggregate performance:", error);
+        throw new Error(`Failed to fetch aggregate performance: ${error.message}`);
     }
 };
 

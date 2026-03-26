@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Trash2, Copy, Loader } from 'lucide-react';
 import { selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
+import { fetchWorkers, createWorker, deactivateWorker } from '../features/workers/workerAPI';
+import supabase from '../services/supabaseClient';
 
 function WorkerManagement() {
     const dispatch = useDispatch();
@@ -14,50 +16,27 @@ function WorkerManagement() {
     const [error, setError] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [successCredentials, setSuccessCredentials] = useState(null);
+    const [villages, setVillages] = useState([]);
 
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
-        assignedArea: '',
-        village: '',
+        assigned_area: '',
+        village_id: '',
+        language: 'en',
     });
 
-    const [villages, setVillages] = useState([]);
-
     useEffect(() => {
-        fetchWorkers();
-        fetchVillages();
+        loadWorkers();
+        loadVillages();
     }, [adminId]);
 
-    const fetchWorkers = async () => {
+    const loadWorkers = async () => {
         try {
             setLoading(true);
             setError(null);
-
-            // Mock data
-            setWorkers([
-                {
-                    id: 1,
-                    name: 'Rajesh Kumar',
-                    employeeId: 'GWC-WRK-0001',
-                    phone: '9876543210',
-                    assignedArea: 'Ward 3',
-                    status: 'active',
-                    lastLogin: '2 hours ago',
-                    tasksDone: 28,
-                },
-                {
-                    id: 2,
-                    name: 'Priya Singh',
-                    employeeId: 'GWC-WRK-0002',
-                    phone: '9876543211',
-                    assignedArea: 'Ward 5',
-                    status: 'active',
-                    lastLogin: '30 min ago',
-                    tasksDone: 35,
-                },
-            ]);
-
+            const data = await fetchWorkers(adminId);
+            setWorkers(data);
             showToast('Workers loaded successfully', 'success');
         } catch (err) {
             setError('Failed to fetch workers');
@@ -67,47 +46,52 @@ function WorkerManagement() {
         }
     };
 
-    const fetchVillages = async () => {
-        // Mock villages
-        setVillages([
-            { id: 1, name: 'Gokul Nagar' },
-            { id: 2, name: 'Ram Vihar' },
-            { id: 3, name: 'Shyam Nagar' },
-        ]);
+    const loadVillages = async () => {
+        try {
+            const { data, error: err } = await supabase
+                .from('villages')
+                .select('id, name')
+                .order('name', { ascending: true });
+
+            if (err) throw err;
+            setVillages(data || []);
+        } catch (err) {
+            console.error('Error loading villages:', err);
+        }
     };
 
     const handleAddWorker = async (e) => {
         e.preventDefault();
 
-        if (!formData.name || !formData.phone || !formData.assignedArea) {
-            showToast('Please fill in all fields', 'error');
+        if (!formData.name || !formData.village_id || !formData.assigned_area) {
+            showToast('Please fill in all required fields', 'error');
             return;
         }
 
         try {
-            // Mock API call
-            const newWorker = {
-                id: workers.length + 1,
-                name: formData.name,
-                employeeId: `GWC-WRK-${String(workers.length + 1).padStart(4, '0')}`,
-                phone: formData.phone,
-                assignedArea: formData.assignedArea,
-                status: 'active',
-                lastLogin: 'N/A',
-                tasksDone: 0,
-            };
+            const result = await createWorker(
+                {
+                    name: formData.name,
+                    phone: formData.phone,
+                    assigned_area: formData.assigned_area,
+                    village_id: formData.village_id,
+                    language: formData.language,
+                },
+                adminId
+            );
 
             setSuccessCredentials({
-                name: formData.name,
-                employeeId: newWorker.employeeId,
-                tempPassword: 'TempPass123!',
+                name: result.name,
+                employee_id: result.employee_id,
+                temp_password: result.temp_password,
             });
 
-            setFormData({ name: '', phone: '', assignedArea: '', village: '' });
+            setFormData({ name: '', phone: '', assigned_area: '', village_id: '', language: 'en' });
+            await loadWorkers();
             showToast('Worker created successfully', 'success');
         } catch (err) {
             setError('Failed to create worker');
-            showToast('Failed to create worker', 'error');
+            showToast('Failed to create worker: ' + err.message, 'error');
         }
     };
 
@@ -115,11 +99,11 @@ function WorkerManagement() {
         if (!window.confirm('Are you sure you want to deactivate this worker?')) return;
 
         try {
-            // Mock deactivation
-            setWorkers(workers.filter(w => w.id !== workerId));
-            showToast('Worker deactivated', 'success');
+            await deactivateWorker(workerId);
+            await loadWorkers();
+            showToast('Worker deactivated successfully', 'success');
         } catch (err) {
-            showToast('Failed to deactivate worker', 'error');
+            showToast('Failed to deactivate worker: ' + err.message, 'error');
         }
     };
 
@@ -171,7 +155,6 @@ function WorkerManagement() {
                                 <th>Phone</th>
                                 <th>Status</th>
                                 <th>Last Login</th>
-                                <th>Tasks Done</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -180,26 +163,29 @@ function WorkerManagement() {
                                 <tr key={worker.id}>
                                     <td><strong>{worker.name}</strong></td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        {worker.employeeId}
+                                        {worker.employee_id}
                                     </td>
-                                    <td>{worker.assignedArea}</td>
-                                    <td>{worker.phone}</td>
+                                    <td>{worker.assigned_area || 'N/A'}</td>
+                                    <td>{worker.phone || 'N/A'}</td>
                                     <td>
-                                        <div className={`admin-badge ${worker.status === 'active' ? 'active' : 'inactive'}`}>
-                                            {worker.status}
+                                        <div className={`admin-badge ${worker.is_active ? 'active' : 'inactive'}`}>
+                                            {worker.is_active ? 'Active' : 'Inactive'}
                                         </div>
                                     </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                        {worker.lastLogin}
+                                        {worker.last_login_at
+                                            ? new Date(worker.last_login_at).toLocaleDateString()
+                                            : 'Never'}
                                     </td>
-                                    <td><strong>{worker.tasksDone}</strong></td>
                                     <td>
-                                        <button
-                                            className="admin-btn-outline admin-btn-sm danger"
-                                            onClick={() => handleDeactivate(worker.id)}
-                                        >
-                                            <Trash2 size={14} /> Deactivate
-                                        </button>
+                                        {worker.is_active && (
+                                            <button
+                                                className="admin-btn-outline admin-btn-sm danger"
+                                                onClick={() => handleDeactivate(worker.id)}
+                                            >
+                                                <Trash2 size={14} /> Deactivate
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -245,7 +231,7 @@ function WorkerManagement() {
                                         <div style={{ fontSize: '12px', color: '#3B6D11', marginBottom: '12px', fontWeight: '600' }}>
                                             ⚠ Note these credentials — they will not be shown again.
                                         </div>
-                                        <div style={{ marginBottom: '12px' }}>
+                                        <div>
                                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>Name</div>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
                                                 <strong>{successCredentials.name}</strong>
@@ -267,9 +253,9 @@ function WorkerManagement() {
                                         <div style={{ marginBottom: '12px' }}>
                                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>Employee ID</div>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                                                <strong>{successCredentials.employeeId}</strong>
+                                                <strong>{successCredentials.employee_id}</strong>
                                                 <button
-                                                    onClick={() => navigator.clipboard.writeText(successCredentials.employeeId)}
+                                                    onClick={() => navigator.clipboard.writeText(successCredentials.employee_id)}
                                                     style={{
                                                         background: 'none',
                                                         border: 'none',
@@ -286,9 +272,9 @@ function WorkerManagement() {
                                         <div>
                                             <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>Temporary Password</div>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                                                <strong>{successCredentials.tempPassword}</strong>
+                                                <strong>{successCredentials.temp_password}</strong>
                                                 <button
-                                                    onClick={() => navigator.clipboard.writeText(successCredentials.tempPassword)}
+                                                    onClick={() => navigator.clipboard.writeText(successCredentials.temp_password)}
                                                     style={{
                                                         background: 'none',
                                                         border: 'none',
@@ -330,13 +316,14 @@ function WorkerManagement() {
                                     </div>
 
                                     <div className="admin-form-group">
-                                        <label className="admin-form-label">Assigned Area</label>
+                                        <label className="admin-form-label required">Assigned Area</label>
                                         <input
                                             type="text"
                                             className="admin-form-input"
                                             placeholder="e.g. Ward 3, Gokul Nagar"
-                                            value={formData.assignedArea}
-                                            onChange={(e) => setFormData({ ...formData, assignedArea: e.target.value })}
+                                            value={formData.assigned_area}
+                                            onChange={(e) => setFormData({ ...formData, assigned_area: e.target.value })}
+                                            required
                                         />
                                     </div>
 
@@ -344,16 +331,34 @@ function WorkerManagement() {
                                         <label className="admin-form-label required">Village</label>
                                         <select
                                             className="admin-form-select"
-                                            value={formData.village}
-                                            onChange={(e) => setFormData({ ...formData, village: e.target.value })}
+                                            value={formData.village_id}
+                                            onChange={(e) => setFormData({ ...formData, village_id: e.target.value })}
                                             required
+                                            disabled={villages.length === 0}
                                         >
-                                            <option value="">Select a village</option>
+                                            <option value="">
+                                                {villages.length === 0
+                                                    ? 'No villages configured in Supabase'
+                                                    : 'Select a village'}
+                                            </option>
                                             {villages.map((v) => (
                                                 <option key={v.id} value={v.id}>
                                                     {v.name}
                                                 </option>
                                             ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label">Language</label>
+                                        <select
+                                            className="admin-form-select"
+                                            value={formData.language}
+                                            onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                                        >
+                                            <option value="en">English</option>
+                                            <option value="hi">Hindi</option>
+                                            <option value="mr">Marathi</option>
                                         </select>
                                     </div>
 
