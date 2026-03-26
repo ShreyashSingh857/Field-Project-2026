@@ -46,3 +46,32 @@ export const scanWaste = async (req, res) => {
     res.status(500).json({ error: 'Failed to analyze waste' });
   }
 };
+
+export const chatWithAssistant = async (req, res) => {
+  try {
+    const { message, history = [], language = 'en' } = req.body;
+    if (!message?.trim()) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: `You are a helpful waste management assistant for rural villages in India. Answer questions about waste disposal, recycling, composting, and sanitation in simple, friendly language. Keep answers concise and practical. Always respond in ${language === 'hi' ? 'Hindi' : language === 'mr' ? 'Marathi' : 'English'}.`,
+    });
+
+    // Convert history to Gemini format
+    const chatHistory = history.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const chat = model.startChat({ history: chatHistory });
+    const result = await chat.sendMessage(message);
+    const reply = result.response.text();
+
+    res.json({ reply });
+  } catch (err) {
+    console.error('Chat error:', err.message);
+    res.status(500).json({ error: 'Failed to get response' });
+  }
+};
