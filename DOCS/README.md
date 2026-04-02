@@ -7,7 +7,7 @@
 - Password: Demo@1234
 
 ### Admin App
-- Panchayat Admin: panchayat@demo.gramwaste.local / Demo@123456
+- Ward Member: wardmember@demo.gramwaste.local / Demo@123456
 - Gram Panchayat: grampanchayat@demo.gramwaste.local / Demo@123456
 - Block Samiti: blocksamiti@demo.gramwaste.local / Demo@123456
 - Zilla Parishad: zillaparishad@demo.gramwaste.local / Demo@123456

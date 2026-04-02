@@ -8,7 +8,7 @@ Sources:
   Districts : https://yashveeeeeer.github.io/india-geodata/districts.geojson
   GPs/Blocks: https://mapservice.gov.in (NIC Bharat Map Services ArcGIS REST)
 
-Scope: Maharashtra state (code 27), Pune district (code 523) for GP level.
+Scope: India-wide states, districts, blocks, and gram panchayats.
 
 Usage:
   pip install requests geopandas shapely supabase python-dotenv
@@ -39,8 +39,10 @@ HEADERS = {
 }
 
 # ── Constants ────────────────────────────────────────────────
-MAHARASHTRA_STATE_CODE = '27'
-PUNE_DISTRICT_CODE = '523'
+SEED_DISTRICT_OFFSET = int(os.getenv('SEED_DISTRICT_OFFSET', '0'))
+SEED_MAX_DISTRICTS = int(os.getenv('SEED_MAX_DISTRICTS', '0'))
+SEED_DISTRICT_SLEEP_SEC = float(os.getenv('SEED_DISTRICT_SLEEP_SEC', '0.2'))
+SEED_VERIFY_SSL = os.getenv('SEED_VERIFY_SSL', '1') != '0'
 
 DISTRICTS_GEOJSON_URL = (
     'https://yashveeeeeer.github.io/india-geodata/districts.geojson'
@@ -54,6 +56,80 @@ GP_REST_URL = (
     'https://mapservice.gov.in/mapserviceserv176/rest/services/'
     'Panchayat/AdminGPHierarchy/MapServer/3/query'
 )
+
+
+def norm_code(value, width=None):
+    s = str(value or '').strip()
+    if not s:
+        return ''
+    return s.zfill(width) if width else s
+
+
+def arcgis_feature_to_geojson(feature):
+    attrs = feature.get('attributes', {})
+    geom = feature.get('geometry', {})
+    rings = geom.get('rings') or []
+    if not rings:
+        return None
+    return {
+        'type': 'Feature',
+        'properties': attrs,
+        'geometry': {'type': 'Polygon', 'coordinates': rings},
+    }
+
+
+def fetch_json(url, params=None, timeout=60, retries=2):
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout, verify=SEED_VERIFY_SSL)
+            if resp.status_code == 200:
+                return resp.json()
+            last_error = f'HTTP {resp.status_code}'
+        except Exception as e:
+            last_error = e
+        time.sleep(min(2 + attempt, 5))
+    print(f'  WARN fetch failed: {url} ({last_error})')
+    return {}
+
+
+def fetch_district_pairs_from_nic():
+    print('\n[fallback] Building district list from NIC GP layer...')
+    pairs = {}
+    id_data = fetch_json(
+        GP_REST_URL,
+        params={'where': '1=1', 'returnIdsOnly': 'true', 'f': 'pjson'},
+        timeout=60,
+    )
+    object_ids = sorted(id_data.get('objectIds') or [])
+    if not object_ids:
+        print('  WARNING: no OBJECTIDs returned from NIC layer')
+        return pairs
+
+    chunk_size = 250
+    for i in range(0, len(object_ids), chunk_size):
+        chunk = object_ids[i:i + chunk_size]
+        where_in = ','.join(str(x) for x in chunk)
+        params = {
+            'where': f'OBJECTID IN ({where_in})',
+            'outFields': 'stcode11,dtcode11,STNAME,DTNAME',
+            'returnGeometry': 'false',
+            'f': 'pjson',
+        }
+        data = fetch_json(GP_REST_URL, params=params, timeout=60)
+        feats = data.get('features', [])
+        for f in feats:
+            a = f.get('attributes', {})
+            st = norm_code(a.get('stcode11'), 2)
+            dt = norm_code(a.get('dtcode11'))
+            if st and dt:
+                pairs[(st, dt)] = (str(a.get('STNAME') or '').strip(), str(a.get('DTNAME') or '').strip())
+
+        if i and i % 5000 == 0:
+            print(f'  Processed OBJECTIDs: {i}/{len(object_ids)}')
+
+    print(f'  District pairs discovered: {len(pairs)}')
+    return pairs
 
 
 def supabase_upsert(table, rows, conflict_cols=None):
@@ -109,23 +185,34 @@ def get_centroid(geojson_geom):
         return None, None
 
 
-# ── Step 1: Seed Maharashtra state ──────────────────────────
+# ── Step 1: Seed all states from district GeoJSON ──────────────────────────
 
-def seed_state():
-    print('\n[1/4] Seeding Maharashtra state...')
-    row = {
-        'name': 'Maharashtra',
-        'census_code': MAHARASHTRA_STATE_CODE,
-        'lgd_code': '27',
-    }
-    n = supabase_upsert('geo_states', [row])
-    print(f'  Inserted/updated {n} state(s)')
+def seed_states_from_districts(districts_geojson, nic_pairs=None):
+    print('\n[1/4] Seeding all states...')
+    by_code = {}
+    if districts_geojson:
+        for feat in districts_geojson.get('features', []):
+            p = feat.get('properties', {})
+            st_code = norm_code(p.get('st_code') or p.get('ST_CEN_CD'), width=2)
+            st_name = str(p.get('stname') or p.get('NAME_1') or p.get('state') or '').strip()
+            if st_code and st_name:
+                by_code[st_code] = st_name.title()
+    elif nic_pairs:
+        for (st_code, _), (st_name, _) in nic_pairs.items():
+            by_code[st_code] = (st_name or f'State {st_code}').title()
 
-    states = supabase_select('geo_states', filters={'census_code': MAHARASHTRA_STATE_CODE})
-    if not states:
-        print('  ERROR: Could not fetch state after insert')
+    rows = [{'name': n, 'census_code': c, 'lgd_code': c} for c, n in sorted(by_code.items())]
+    inserted = 0
+    for i in range(0, len(rows), 100):
+        inserted += supabase_upsert('geo_states', rows[i:i + 100])
+    print(f'  Inserted/updated {inserted} states')
+
+    states = supabase_select('geo_states', select='id,census_code')
+    state_id_map = {norm_code(s.get('census_code'), 2): s.get('id') for s in states}
+    if not state_id_map:
+        print('  ERROR: state table empty after upsert')
         sys.exit(1)
-    return states[0]['id']
+    return state_id_map
 
 
 # ── Step 2: Seed districts from GeoJSON ─────────────────────
@@ -135,28 +222,23 @@ def fetch_districts_geojson():
     for url in [DISTRICTS_GEOJSON_URL, DISTRICTS_FALLBACK_URL]:
         try:
             print(f'  Trying {url}')
-            resp = requests.get(url, timeout=60)
-            if resp.status_code == 200:
-                data = resp.json()
+            data = fetch_json(url, timeout=60)
+            if data and data.get('features'):
                 print(f'  Got {len(data["features"])} district features')
                 return data
         except Exception as e:
             print(f'  Failed: {e}')
-    print('  ERROR: Could not fetch district GeoJSON from any source')
-    sys.exit(1)
+    print('  WARNING: district GeoJSON unavailable, switching to NIC fallback')
+    return None
 
 
-def seed_districts(state_id, districts_geojson):
-    print('  Filtering to Maharashtra districts...')
-    mh_features = [
-        f for f in districts_geojson['features']
-        if str(f.get('properties', {}).get('st_code', '')).zfill(2) == MAHARASHTRA_STATE_CODE
-        or str(f.get('properties', {}).get('stname', '')).lower() == 'maharashtra'
-    ]
-    print(f'  Found {len(mh_features)} Maharashtra districts')
+def seed_districts(state_id_map, districts_geojson, nic_pairs=None):
+    print('\n[2/4] Seeding all district boundaries...')
+    features = districts_geojson.get('features', []) if districts_geojson else []
+    print(f'  Found {len(features)} district features')
 
     rows = []
-    for feat in mh_features:
+    for feat in features:
         props = feat.get('properties', {})
         geom = feat.get('geometry')
         if not geom:
@@ -172,8 +254,11 @@ def seed_districts(state_id, districts_geojson):
             or props.get('district')
             or 'Unknown'
         )
-        census_code = str(props.get('dt_code') or props.get('DT_CEN_CD') or '')
-        state_census_code = MAHARASHTRA_STATE_CODE
+        census_code = norm_code(props.get('dt_code') or props.get('DT_CEN_CD'))
+        state_census_code = norm_code(props.get('st_code') or props.get('ST_CEN_CD'), 2)
+        state_id = state_id_map.get(state_census_code)
+        if not census_code or not state_census_code or not state_id:
+            continue
 
         rows.append({
             'name': name.strip().title(),
@@ -197,10 +282,28 @@ def seed_districts(state_id, districts_geojson):
 
     print(f'  Total districts inserted: {inserted}')
 
+    if inserted == 0 and nic_pairs:
+        fallback_rows = []
+        for (st_code, dt_code), (_, dt_name) in nic_pairs.items():
+            state_id = state_id_map.get(st_code)
+            if not state_id:
+                continue
+            fallback_rows.append({
+                'name': (dt_name or f'District {dt_code}').title(),
+                'state_id': state_id,
+                'census_code': dt_code,
+                'state_census_code': st_code,
+                'lgd_code': dt_code,
+            })
+        fallback_inserted = 0
+        for i in range(0, len(fallback_rows), 100):
+            fallback_inserted += supabase_upsert('geo_districts', fallback_rows[i:i + 100])
+        print(f'  Fallback inserted/updated {fallback_inserted} districts')
 
-# ── Step 3: Fetch GPs for Pune from ArcGIS REST ─────────────
 
-def fetch_gps_for_district(district_code, state_code=MAHARASHTRA_STATE_CODE):
+# ── Step 3: Fetch district GPs from ArcGIS REST ─────────────
+
+def fetch_gps_for_district(district_code, state_code):
     """
     Fetch all GP polygons for a given district from NIC Bharat Map Services.
     Paginates through results 1000 at a time.
@@ -215,18 +318,20 @@ def fetch_gps_for_district(district_code, state_code=MAHARASHTRA_STATE_CODE):
         params = {
             'where': f"stcode11='{state_code}' AND dtcode11='{district_code}'",
             'outFields': 'GPCODE,GPNAME,stcode11,dtcode11,blkcode11,BLKNAME,DTNAME',
-            'f': 'geojson',
+            'f': 'pjson',
+            'returnGeometry': 'true',
             'resultOffset': offset,
             'resultRecordCount': page_size,
             'outSR': '4326',
         }
         try:
-            resp = requests.get(GP_REST_URL, params=params, timeout=60)
-            if resp.status_code != 200:
-                print(f'  HTTP {resp.status_code} at offset {offset}')
+            data = fetch_json(GP_REST_URL, params=params, timeout=60)
+            if data.get('error'):
+                print(f"  Query error at offset {offset}: {data.get('error', {}).get('message')}")
                 break
-            data = resp.json()
-            features = data.get('features', [])
+            raw_features = data.get('features', [])
+            features = [arcgis_feature_to_geojson(f) for f in raw_features]
+            features = [f for f in features if f]
             if not features:
                 break
             all_features.extend(features)
@@ -243,7 +348,7 @@ def fetch_gps_for_district(district_code, state_code=MAHARASHTRA_STATE_CODE):
     return all_features
 
 
-def seed_blocks_and_gps(district_census_code, gp_features):
+def seed_blocks_and_gps(district_census_code, state_census_code, gp_features):
     """
     From GP features, derive blocks by dissolving on blkcode11,
     then insert blocks and GPs into the database.
@@ -296,7 +401,7 @@ def seed_blocks_and_gps(district_census_code, gp_features):
                 'name': blk_name.strip().title(),
                 'district_id': district_db_id,
                 'census_code': blk_code,
-                'state_census_code': MAHARASHTRA_STATE_CODE,
+                'state_census_code': state_census_code,
                 'district_census_code': district_census_code,
                 'boundary_geojson': simplified,
                 'centroid_lat': centroid_lat,
@@ -344,7 +449,7 @@ def seed_blocks_and_gps(district_census_code, gp_features):
             'block_id': block_db_id,
             'district_id': district_db_id,
             'census_code': gp_code,
-            'state_census_code': MAHARASHTRA_STATE_CODE,
+            'state_census_code': state_census_code,
             'district_census_code': dt_code,
             'block_census_code': blk_code,
             'boundary_geojson': simplified,
@@ -404,21 +509,50 @@ def update_demo_village():
             print(f'  Insert result: {r2.status_code}')
 
 
+def collect_district_pairs(districts_geojson, nic_pairs=None):
+    pairs = set()
+    if districts_geojson:
+        for feat in districts_geojson.get('features', []):
+            p = feat.get('properties', {})
+            st_code = norm_code(p.get('st_code') or p.get('ST_CEN_CD'), 2)
+            dt_code = norm_code(p.get('dt_code') or p.get('DT_CEN_CD'))
+            if st_code and dt_code:
+                pairs.add((st_code, dt_code))
+    elif nic_pairs:
+        pairs = set(nic_pairs.keys())
+    ordered = sorted(pairs)
+    if SEED_DISTRICT_OFFSET:
+        ordered = ordered[SEED_DISTRICT_OFFSET:]
+    if SEED_MAX_DISTRICTS > 0:
+        ordered = ordered[:SEED_MAX_DISTRICTS]
+    return ordered
+
+
 # ── Main ─────────────────────────────────────────────────────
 
 def main():
     print('=' * 60)
     print('GramWasteConnect Geographic Boundary Seeder')
-    print('Scope: Maharashtra state | Pune district (GP-level)')
+    print('Scope: India-wide states, districts, blocks, gram panchayats')
     print('=' * 60)
-
-    state_id = seed_state()
-
     districts_geojson = fetch_districts_geojson()
-    seed_districts(state_id, districts_geojson)
+    nic_pairs = None
+    if not districts_geojson:
+        nic_pairs = fetch_district_pairs_from_nic()
 
-    gp_features = fetch_gps_for_district(PUNE_DISTRICT_CODE)
-    seed_blocks_and_gps(PUNE_DISTRICT_CODE, gp_features)
+    state_id_map = seed_states_from_districts(districts_geojson, nic_pairs)
+    seed_districts(state_id_map, districts_geojson, nic_pairs)
+
+    district_pairs = collect_district_pairs(districts_geojson, nic_pairs)
+    print(f'\n[3/4] Seeding blocks and GPs for {len(district_pairs)} districts...')
+    for idx, (state_code, district_code) in enumerate(district_pairs, start=1):
+        print(f'\n  District {idx}/{len(district_pairs)}: state={state_code} district={district_code}')
+        try:
+            gp_features = fetch_gps_for_district(district_code, state_code)
+            seed_blocks_and_gps(district_code, state_code, gp_features)
+        except Exception as e:
+            print(f'  ERROR district {district_code}: {e}')
+        time.sleep(SEED_DISTRICT_SLEEP_SEC)
 
     update_demo_village()
 

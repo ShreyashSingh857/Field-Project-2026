@@ -12,9 +12,9 @@ government sources and populates the Supabase geo_* tables.
 - Blocks: Derived by dissolving GP polygons on block code
 
 ## Scope
-- All Maharashtra districts (boundary polygons)
-- Pune district only: GP-level and block-level boundaries
-- ~27,000 GP records for Pune district
+- All India states and districts (boundary polygons)
+- All district-level GP boundaries available from NIC map services
+- Block boundaries derived by dissolving GP polygons
 
 ## Setup
 ```bash
@@ -27,16 +27,22 @@ Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env
 
 ## Run
 ```bash
-python3 scripts/seed_geo_boundaries.py
+python scripts/seed_geo_boundaries.py
 ```
+
+## Resumable controls
+- `SEED_DISTRICT_OFFSET` start from district index offset
+- `SEED_MAX_DISTRICTS` limit count for chunked runs (0 = all)
+- `SEED_DISTRICT_SLEEP_SEC` delay between districts
+- `SEED_VERIFY_SSL` set `0` only if your network breaks TLS handshakes
 
 ## Run SQL migration first
 Run GEOGRAPHIC_MIGRATION.sql in Supabase SQL Editor before
 running this script.
 
 ## Expected runtime
-~10-15 minutes for Pune district GPs (pagination from govt server).
-District polygons are fast (~2 minutes).
+Full India run can take many hours depending on NIC response times.
+Use chunked runs with offset/limit to safely continue across sessions.
 
 ## Troubleshooting
 - If NIC ArcGIS endpoint is slow/down, the script retries once per page.
