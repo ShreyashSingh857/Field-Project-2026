@@ -5,6 +5,8 @@ import { Leaf, Eye, EyeOff } from 'lucide-react';
 import { loginAdmin, selectAuthLoading, selectAuthError, clearError } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
 
+import { DEMO_CREDENTIALS } from '../utils/constants';
+
 function Login() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -15,14 +17,16 @@ function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [loginRole, setLoginRole] = useState('panchayat_admin');
 
-    const roleOptions = [
-        { key: 'panchayat_admin', label: 'Login as Panchayat Admin' },
-        { key: 'gram_panchayat', label: 'Login as Gram Panchayat' },
-        { key: 'block_samiti', label: 'Login as Block Samhiti' },
-        { key: 'zilla_parishad', label: 'Login as Jila Parishadh' },
-    ];
+    const ROLE_KEYS = ['zilla_parishad', 'block_samiti', 'gram_panchayat', 'ward_member'];
+    const [selectedRole, setSelectedRole] = useState(null);
+
+    const handleDemoRoleClick = (roleKey) => {
+      const cred = DEMO_CREDENTIALS[roleKey];
+      setSelectedRole(roleKey);
+      setEmail(cred.email);
+      setPassword(cred.password);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -100,20 +104,49 @@ function Login() {
                 {/* Form */}
                 <form onSubmit={handleSubmit}>
                     <div className="admin-form-group">
-                        <label className="admin-form-label">Select Login Role</label>
+                        <label className="admin-form-label">
+                            Quick Demo Login — click a role to auto-fill credentials
+                        </label>
                         <div style={{ display: 'grid', gap: '8px' }}>
-                            {roleOptions.map((option) => (
-                                <button
-                                    key={option.key}
-                                    type="button"
-                                    onClick={() => setLoginRole(option.key)}
-                                    className={loginRole === option.key ? 'admin-btn-primary admin-btn-sm' : 'admin-btn-outline admin-btn-sm'}
-                                    style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-                                >
-                                    {option.label}
-                                </button>
-                            ))}
+                            {ROLE_KEYS.map((roleKey) => {
+                                const cred = DEMO_CREDENTIALS[roleKey];
+                                const isSelected = selectedRole === roleKey;
+                                return (
+                                    <button
+                                        key={roleKey}
+                                        type="button"
+                                        onClick={() => handleDemoRoleClick(roleKey)}
+                                        style={{
+                                            textAlign: 'left',
+                                            padding: '10px 14px',
+                                            borderRadius: '8px',
+                                            border: isSelected
+                                                ? `2px solid ${cred.color}`
+                                                : '1.5px solid var(--admin-border)',
+                                            backgroundColor: isSelected ? `${cred.color}12` : 'transparent',
+                                            color: isSelected ? cred.color : 'var(--admin-text)',
+                                            fontWeight: isSelected ? '600' : '400',
+                                            fontSize: '13px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <span>{cred.label}</span>
+                                        {isSelected && (
+                                            <span style={{ fontSize: '11px', color: cred.color, fontWeight: '500' }}>
+                                                ✓ credentials filled
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
+                        <p style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '8px' }}>
+                            Or enter your own credentials below
+                        </p>
                     </div>
 
                     {/* Email Input */}

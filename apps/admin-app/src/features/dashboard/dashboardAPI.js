@@ -1,6 +1,6 @@
 import api from '../../services/axiosInstance';
 
-export async function fetchDashboardStats() {
+export async function fetchDashboardStats(adminId, role) {
 	const [binsRes, tasksRes, issuesRes, workersRes] = await Promise.allSettled([
 		api.get('/bins'),
 		api.get('/tasks'),

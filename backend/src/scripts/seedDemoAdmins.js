@@ -8,7 +8,7 @@ const admins = [
   { name: 'Zilla Parishad Admin', email: 'zillaparishad@demo.gramwaste.local', role: 'zilla_parishad', jurisdiction_name: 'Pune District' },
   { name: 'Block Samiti Admin', email: 'blocksamiti@demo.gramwaste.local', role: 'block_samiti', jurisdiction_name: 'Haveli Block' },
   { name: 'Gram Panchayat Admin', email: 'grampanchayat@demo.gramwaste.local', role: 'gram_panchayat', jurisdiction_name: 'Uruli Kanchan GP' },
-  { name: 'Panchayat Admin', email: 'panchayat@demo.gramwaste.local', role: 'panchayat_admin', jurisdiction_name: 'Gokul Nagar' },
+  { name: 'Ward Member', email: 'wardmember@demo.gramwaste.local', role: 'ward_member', jurisdiction_name: 'Gokul Nagar' },
 ];
 
 async function upsertAdmin(admin, parentId = null, createdBy = null) {

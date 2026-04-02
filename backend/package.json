@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed:demo": "node src/scripts/seedDemoAdmins.js"
+    "seed:demo": "node src/scripts/seedDemoAdmins.js",
+    "seed:geo": "python3 scripts/seed_geo_boundaries.py"
   },
   "dependencies": {
       "bcryptjs": "^2.4.3",

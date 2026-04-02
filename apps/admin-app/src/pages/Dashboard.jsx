@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Trash2, AlertTriangle, ClipboardList, MessageSquareWarning, Users, Loader } from 'lucide-react';
+import { Trash2, AlertTriangle, ClipboardList, MessageSquareWarning, Users, Loader, Globe, ChevronRight } from 'lucide-react';
 import StatCard from '../components/StatCard';
-import { selectRole, selectAdminId } from '../features/auth/authSlice';
+import { selectRole, selectAdminId, selectAdmin } from '../features/auth/authSlice';
 import { fetchDashboardStats } from '../features/dashboard/dashboardAPI';
 import { useToast, Toast } from '../utils/useToast';
 import { PRIORITY_LABELS, PRIORITY_COLORS, STATUS_BADGE_CLASS } from '../utils/constants';
+import api from '../services/axiosInstance';
+
 
 function Dashboard() {
     const dispatch = useDispatch();
     const role = useSelector(selectRole);
     const adminId = useSelector(selectAdminId);
+    const admin = useSelector(selectAdmin);
     const { toast, showToast } = useToast();
 
     const [stats, setStats] = useState({
@@ -24,9 +27,11 @@ function Dashboard() {
     const [overdueItems, setOverdueItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [subJurisdictions, setSubJurisdictions] = useState([]);
+    const [subJurLoading, setSubJurLoading] = useState(false);
 
         const dashboardTitle = {
-            panchayat_admin: 'Village Dashboard',
+            ward_member: 'Ward Dashboard',
             gram_panchayat: 'Gram Panchayat Dashboard',
             block_samiti: 'Block Samiti Dashboard',
             zilla_parishad: 'District Dashboard',
@@ -34,6 +39,9 @@ function Dashboard() {
 
     useEffect(() => {
         fetchDashboardData();
+        if (role !== 'ward_member' && role !== 'gram_panchayat') {
+            fetchSubJurisdictions();
+        }
     }, [role]);
 
     const fetchDashboardData = async () => {
@@ -41,7 +49,7 @@ function Dashboard() {
             setLoading(true);
             setError(null);
 
-            const liveStats = await fetchDashboardStats();
+            const liveStats = await fetchDashboardStats(adminId, role);
             setStats({
                 totalBins: liveStats.totalBins,
                 binsNeedingAttention: liveStats.binsNeedingAttention,
@@ -58,6 +66,18 @@ function Dashboard() {
             showToast('Failed to load dashboard data', 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchSubJurisdictions = async () => {
+        try {
+            setSubJurLoading(true);
+            const { data } = await api.get('/admin/sub-jurisdictions');
+            setSubJurisdictions(data?.subJurisdictions || []);
+        } catch (_e) {
+            setSubJurisdictions([]);
+        } finally {
+            setSubJurLoading(false);
         }
     };
 
@@ -98,6 +118,27 @@ function Dashboard() {
         <div>
             <Toast toast={toast} />
             <h1 className="admin-page-title">{dashboardTitle}</h1>
+            <p style={{ fontSize: '13px', color: 'var(--admin-muted)', marginBottom: '20px', marginTop: '-8px' }}>
+                {{
+                    ward_member:    `Ward: ${admin?.jurisdiction_name || '—'}`,
+                    gram_panchayat: `Gram Panchayat: ${admin?.jurisdiction_name || '—'}`,
+                    block_samiti:   `Block: ${admin?.jurisdiction_name || '—'}`,
+                    zilla_parishad: `District: ${admin?.jurisdiction_name || '—'}`,
+                }[role] || ''}
+                {admin?.lgd_jurisdiction_code && (
+                    <span style={{
+                        marginLeft: '10px',
+                        fontSize: '11px',
+                        backgroundColor: '#E3F2FD',
+                        color: '#1565C0',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontWeight: '600',
+                    }}>
+                        LGD: {admin.lgd_jurisdiction_code}
+                    </span>
+                )}
+            </p>
 
             {error && (
                 <div className="admin-alert danger" style={{ marginBottom: '20px' }}>
@@ -109,20 +150,20 @@ function Dashboard() {
             <div className="admin-stat-grid">
                 <StatCard
                     icon={Trash2}
-                    label={role === 'panchayat_admin' ? 'Total Bins' : 'Active Bins'}
+                    label={role === 'ward_member' ? 'Total Bins' : 'Bins in Jurisdiction'}
                     value={stats.totalBins}
                     sub="Total in jurisdiction"
                 />
                 <StatCard
                     icon={AlertTriangle}
-                    label={role === 'panchayat_admin' ? 'Bin Fill Alerts' : 'Escalated Issues'}
+                    label={role === 'ward_member' ? 'Bin Fill Alerts' : 'GPs with Overdue Tasks'}
                     value={stats.binsNeedingAttention}
                     sub={stats.totalBins ? `${((stats.binsNeedingAttention / stats.totalBins) * 100).toFixed(1)}% of total` : '0.0% of total'}
                     variant="warning"
                 />
                 <StatCard
                     icon={ClipboardList}
-                    label={role === 'panchayat_admin' ? 'Tasks Today' : 'District-Wide Tasks'}
+                    label={role === 'ward_member' ? 'Tasks Today' : 'Tasks Across Jurisdiction'}
                     value={stats.tasksToday}
                     sub="Created in last 24h"
                 />
@@ -133,15 +174,94 @@ function Dashboard() {
                     sub="Pending review"
                     variant="danger"
                 />
-                {role === 'panchayat_admin' && (
+                {role === 'ward_member' && (
                     <StatCard
                         icon={Users}
-                        label="Workers Active Today"
+                        label="Active Workers"
                         value={stats.activeWorkers}
                         sub="Logged in today"
                     />
                 )}
             </div>
+
+            {/* Sub-Jurisdictions Panel */}
+            {(subJurisdictions.length > 0 || subJurLoading) && (
+                <div className="admin-panel" style={{ marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Globe size={18} style={{ color: 'var(--admin-primary)' }} />
+                            {{
+                                zilla_parishad: 'Blocks / Talukas under this District',
+                                block_samiti:   'Gram Panchayats under this Block',
+                            }[role] || 'Sub-Jurisdictions'}
+                        </h2>
+                        <span style={{
+                            fontSize: '11px',
+                            backgroundColor: '#E8F5E9',
+                            color: '#2E7D32',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontWeight: '600',
+                        }}>
+                            Source: OpenStreetMap
+                        </span>
+                    </div>
+
+                    {subJurLoading ? (
+                        <div style={{ textAlign: 'center', padding: '24px', color: 'var(--admin-muted)', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                            Fetching live boundary data from OSM…
+                        </div>
+                    ) : (
+                        <div className="admin-table-wrap">
+                            <table className="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Name</th>
+                                        <th>OSM ID</th>
+                                        <th>LGD Code</th>
+                                        <th>Admin Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {subJurisdictions.map((sub, idx) => (
+                                        <tr key={sub.osm_id || idx}>
+                                            <td style={{ color: 'var(--admin-muted)', fontSize: '12px' }}>{idx + 1}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <ChevronRight size={12} style={{ color: 'var(--admin-primary)', flexShrink: 0 }} />
+                                                    <strong>{sub.name}</strong>
+                                                </div>
+                                            </td>
+                                            <td style={{ fontSize: '12px', color: 'var(--admin-muted)', fontFamily: 'monospace' }}>
+                                                {sub.osm_id ? `R${sub.osm_id}` : '—'}
+                                            </td>
+                                            <td>
+                                                {sub.lgd_code ? (
+                                                    <span style={{
+                                                        fontSize: '11px',
+                                                        backgroundColor: '#E3F2FD',
+                                                        color: '#1565C0',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontWeight: '600',
+                                                    }}>
+                                                        {sub.lgd_code}
+                                                    </span>
+                                                ) : <span style={{ color: 'var(--admin-muted)', fontSize: '12px' }}>—</span>}
+                                            </td>
+                                            <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                                Level {sub.admin_level || '?'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Overdue Alert */}
             {overdueItems.length > 0 && (

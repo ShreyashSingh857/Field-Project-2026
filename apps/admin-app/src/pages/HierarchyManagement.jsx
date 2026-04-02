@@ -24,6 +24,7 @@ function HierarchyManagement() {
         email: '',
         password: '',
         jurisdiction_name: '',
+        lgd_jurisdiction_code: '',
     });
 
     useEffect(() => {
@@ -50,7 +51,7 @@ function HierarchyManagement() {
     const getNewRoleForCreation = () => {
         if (role === 'zilla_parishad') return 'block_samiti';
         if (role === 'block_samiti') return 'gram_panchayat';
-        if (role === 'gram_panchayat') return 'panchayat_admin';
+        if (role === 'gram_panchayat') return 'ward_member';
         return null;
     };
 
@@ -82,6 +83,7 @@ function HierarchyManagement() {
                                 password: formData.password,
                                 role: newRoleForCreation,
                                 jurisdiction_name: formData.jurisdiction_name,
+                                lgd_jurisdiction_code: formData.lgd_jurisdiction_code || null,
                             },
                             adminId,
                             adminRole: role,
@@ -99,6 +101,7 @@ function HierarchyManagement() {
                 email: '',
                 password: '',
                 jurisdiction_name: '',
+                lgd_jurisdiction_code: '',
             });
 
             await loadAdmins();
@@ -165,6 +168,7 @@ function HierarchyManagement() {
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Jurisdiction</th>
+                                <th>LGD Code</th>
                                 <th>Created At</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -179,6 +183,9 @@ function HierarchyManagement() {
                                     </td>
                                     <td>{formatRoleLabel(admin.role)}</td>
                                     <td>{admin.jurisdiction_name}</td>
+                                    <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                        {admin.lgd_jurisdiction_code || '—'}
+                                    </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
                                         {new Date(admin.created_at).toLocaleDateString('en-IN')}
                                     </td>
@@ -366,6 +373,20 @@ function HierarchyManagement() {
                                             }
                                             required
                                         />
+                                    </div>
+
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label">LGD Code (optional)</label>
+                                        <input
+                                            type="text"
+                                            className="admin-form-input"
+                                            placeholder="e.g. 5504 for Haveli Block — from lgdirectory.nic.in"
+                                            value={formData.lgd_jurisdiction_code}
+                                            onChange={(e) => setFormData({ ...formData, lgd_jurisdiction_code: e.target.value })}
+                                        />
+                                        <div style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '4px' }}>
+                                            Find LGD codes at lgdirectory.nic.in → Local Body → Maharashtra
+                                        </div>
                                     </div>
 
                                     <div className="admin-modal-footer">

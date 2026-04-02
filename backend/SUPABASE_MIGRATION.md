@@ -2,6 +2,47 @@
 
 Run the following SQL in your **Supabase Dashboard → SQL Editor**.
 
+## Phase 0 Migration — Run in Supabase SQL Editor
+
+-- Step 1: Add ward_member to role enum (if role is a custom type)
+-- Find the enum name first:
+--   SELECT typname FROM pg_type WHERE typcategory = 'E';
+-- Then run:
+ALTER TYPE admin_role ADD VALUE IF NOT EXISTS 'ward_member';
+
+-- Step 2: Add LGD code columns
+ALTER TABLE admins
+  ADD COLUMN IF NOT EXISTS lgd_jurisdiction_code text;
+
+ALTER TABLE villages
+  ADD COLUMN IF NOT EXISTS lgd_state_code    text,
+  ADD COLUMN IF NOT EXISTS lgd_district_code text,
+  ADD COLUMN IF NOT EXISTS lgd_block_code    text,
+  ADD COLUMN IF NOT EXISTS lgd_gp_code       text,
+  ADD COLUMN IF NOT EXISTS lgd_village_code  text;
+
+-- Step 3: Seed LGD data for the demo village
+-- Source: lgdirectory.nic.in — Maharashtra state data
+-- These are real LGD codes for the Pune / Haveli / Uruli Kanchan area.
+UPDATE villages
+SET
+  lgd_state_code    = '27',
+  lgd_district_code = '523',
+  lgd_block_code    = '5504',
+  lgd_gp_code       = '556432'
+WHERE gram_panchayat_name ILIKE 'Uruli Kanchan%';
+
+-- If the village does not exist yet, insert it:
+INSERT INTO villages
+  (name, district, block_name, gram_panchayat_name,
+   location_lat, location_lng,
+   lgd_state_code, lgd_district_code, lgd_block_code, lgd_gp_code)
+VALUES
+  ('Uruli Kanchan', 'Pune District', 'Haveli Block', 'Uruli Kanchan GP',
+   18.5089, 74.0578,
+   '27', '523', '5504', '556432')
+ON CONFLICT DO NOTHING;
+
 ## 1. Smart Bins table
 
 ```sql
