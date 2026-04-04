@@ -1,11 +1,12 @@
 import api from '../../services/axiosInstance';
 
 export async function fetchDashboardStats(adminId, role) {
+	const canLoadWorkers = role === 'ward_member';
 	const [binsRes, tasksRes, issuesRes, workersRes] = await Promise.allSettled([
 		api.get('/bins'),
 		api.get('/tasks'),
 		api.get('/issues'),
-		api.get('/workers'),
+		canLoadWorkers ? api.get('/workers') : Promise.resolve({ data: { workers: [] } }),
 	]);
 
 	const bins = binsRes.status === 'fulfilled' ? binsRes.value.data?.bins || [] : [];

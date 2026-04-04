@@ -124,7 +124,7 @@ src/
 | `zilla_parishad` | dashboard, bins, announcements, reports, escalations, hierarchy |
 | `block_samiti` | dashboard, bins, announcements, reports, escalations, hierarchy |
 | `gram_panchayat` | dashboard, bins, announcements, reports, escalations, hierarchy |
-| `panchayat_admin` | dashboard, bins, announcements, reports, tasks, workers, issues |
+| `ward_member` | dashboard, bins, announcements, reports, tasks, workers, issues |
 
 ## API Integration Notes
 

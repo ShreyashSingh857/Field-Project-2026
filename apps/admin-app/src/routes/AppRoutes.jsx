@@ -51,7 +51,7 @@ function AppRoutes() {
                 <Route
                     path="/bins"
                     element={
-                        <RoleGate allowedRoles={['ward_member', 'gram_panchayat']}>
+                        <RoleGate allowedRoles={['ward_member', 'gram_panchayat', 'block_samiti', 'zilla_parishad']}>
                             <BinMap />
                         </RoleGate>
                     }

@@ -80,6 +80,9 @@ function BinMap() {
     const [villages, setVillages] = useState([]);
     const [jurisdictionBoundary, setJurisdictionBoundary] = useState(null);
     const [subBoundaries, setSubBoundaries] = useState(null);
+    const [showBlocks, setShowBlocks] = useState(true);
+    const [showPanchayats, setShowPanchayats] = useState(false);
+    const [selectedBlockCode, setSelectedBlockCode] = useState('');
     const [boundsFit, setBoundsFit] = useState(null);
     const [loading, setLoading] = useState(true);
     const [boundaryLoading, setBoundaryLoading] = useState(false);
@@ -193,6 +196,18 @@ function BinMap() {
         : role === 'block_samiti' ? 11
         : role === 'zilla_parishad' ? 9
         : 12;
+
+    const subFeatures = subBoundaries?.features || [];
+    const blockFeatures = subFeatures.filter((f) => f?.properties?.level === 'block');
+    const panchayatFeatures = subFeatures.filter((f) => f?.properties?.level === 'gp');
+    const visiblePanchayats =
+        role === 'zilla_parishad' && selectedBlockCode
+            ? panchayatFeatures.filter((f) => String(f?.properties?.block_code || '') === String(selectedBlockCode))
+            : panchayatFeatures;
+
+    const visibleSubFeatures = [];
+    if (showBlocks) visibleSubFeatures.push(...blockFeatures);
+    if (showPanchayats || role === 'block_samiti') visibleSubFeatures.push(...visiblePanchayats);
 
     if (loading) {
         return (
@@ -328,6 +343,45 @@ function BinMap() {
                         </div>
                     )}
 
+                    {(role === 'zilla_parishad' || role === 'block_samiti') && (
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                            {role === 'zilla_parishad' && (
+                                <>
+                                    <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <input type="checkbox" checked={showBlocks} onChange={(e) => setShowBlocks(e.target.checked)} />
+                                        Show blocks
+                                    </label>
+                                    <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <input type="checkbox" checked={showPanchayats} onChange={(e) => setShowPanchayats(e.target.checked)} />
+                                        Show panchayats
+                                    </label>
+                                    <select
+                                        className="admin-form-select"
+                                        style={{ width: '260px', padding: '6px 10px', fontSize: '12px' }}
+                                        value={selectedBlockCode}
+                                        onChange={(e) => {
+                                            setSelectedBlockCode(e.target.value);
+                                            if (e.target.value) setShowPanchayats(true);
+                                        }}
+                                    >
+                                        <option value="">All blocks</option>
+                                        {blockFeatures.map((b) => (
+                                            <option key={b.properties?.lgd_code} value={b.properties?.lgd_code}>
+                                                {b.properties?.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
+
+                            {role === 'block_samiti' && (
+                                <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                    Panchayat boundaries are shown for your block.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div style={{ border: '1px solid var(--admin-border)', borderRadius: '8px', height: '500px', overflow: 'hidden' }}>
                         <MapContainer center={defaultCenter} zoom={mapZoom} style={{ height: '100%', width: '100%' }}>
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
@@ -350,16 +404,16 @@ function BinMap() {
                                 />
                             )}
 
-                            {subBoundaries && subBoundaries.features.map((feat, idx) => (
+                            {visibleSubFeatures.map((feat, idx) => (
                                 <GeoJSON
                                     key={`sub-${feat.properties?.lgd_code || idx}`}
                                     data={feat}
                                     style={{
-                                        color: '#E65100',
-                                        weight: 1,
-                                        fillColor: '#E65100',
-                                        fillOpacity: 0.03,
-                                        dashArray: '3 3',
+                                        color: feat.properties?.level === 'block' ? '#E65100' : '#2E7D32',
+                                        weight: feat.properties?.level === 'block' ? 1.4 : 0.8,
+                                        fillColor: feat.properties?.level === 'block' ? '#E65100' : '#2E7D32',
+                                        fillOpacity: feat.properties?.level === 'block' ? 0.04 : 0.02,
+                                        dashArray: feat.properties?.level === 'block' ? '3 3' : '2 4',
                                     }}
                                 />
                             ))}
@@ -427,12 +481,17 @@ function BinMap() {
                                         borderTop: '2px dashed #1565C0' }} />
                                     <span>Your jurisdiction</span>
                                 </div>
-                                {subBoundaries && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <div style={{ width: '20px', height: '2px', background: '#E65100',
-                                            borderTop: '1px dashed #E65100' }} />
-                                        <span>Sub-jurisdictions</span>
-                                    </div>
+                                {visibleSubFeatures.length > 0 && (
+                                    <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                            <div style={{ width: '20px', height: '2px', background: '#E65100', borderTop: '1px dashed #E65100' }} />
+                                            <span>Blocks</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ width: '20px', height: '2px', background: '#2E7D32', borderTop: '1px dashed #2E7D32' }} />
+                                            <span>Panchayats</span>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}

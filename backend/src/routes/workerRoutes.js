@@ -76,9 +76,9 @@ router.get('/area-options', verifyAdminJWT, requireRole('ward_member'), async (r
     const { data, error } = await query.order('name', { ascending: true });
     if (error) throw error;
 
-    const options = (data || []).map((a) => ({ id: a.id, label: a.name || a.jurisdiction_name || 'Panchayat Admin' }));
-    if (!options.some((o) => o.id === me.id)) options.unshift({ id: me.id, label: me.name || 'Panchayat Admin' });
-    return res.json({ options, defaultArea: me.name || 'Panchayat Admin' });
+    const options = (data || []).map((a) => ({ id: a.id, label: a.name || a.jurisdiction_name || 'Ward Member Area' }));
+    if (!options.some((o) => o.id === me.id)) options.unshift({ id: me.id, label: me.name || 'Ward Member Area' });
+    return res.json({ options, defaultArea: me.name || 'Ward Member Area' });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to load area options' });
   }
