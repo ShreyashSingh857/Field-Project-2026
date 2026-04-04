@@ -17,12 +17,12 @@ The admin app is a **single app with role-based views**. All four levels of the 
 |---|---|---|---|
 | `zilla_parishad` | जिला परिषद | Entire district | block_samiti accounts |
 | `block_samiti` | ब्लॉक समिति | Multiple Gram Panchayats | gram_panchayat accounts |
-| `gram_panchayat` | ग्राम पंचायत | Multiple villages | panchayat_admin accounts |
-| `panchayat_admin` | पंचायत व्यवस्थापक | Single village | worker accounts + tasks |
+| `gram_panchayat` | ग्राम पंचायत | Multiple villages | ward_member accounts |
+| `ward_member` | पंचायत व्यवस्थापक | Single village | worker accounts + tasks |
 
 ### What each role can do
 
-| Feature | panchayat_admin | gram_panchayat | block_samiti | zilla_parishad |
+| Feature | ward_member | gram_panchayat | block_samiti | zilla_parishad |
 |---|---|---|---|---|
 | Create worker accounts | ✅ | ❌ | ❌ | ❌ |
 | Create & assign tasks | ✅ | ❌ | ❌ | ❌ |
@@ -31,7 +31,7 @@ The admin app is a **single app with role-based views**. All four levels of the 
 | View bin map | ✅ | ✅ | ✅ | ✅ |
 | Post announcements | ✅ | ✅ | ✅ | ✅ |
 | View aggregated reports | ✅ (own village) | ✅ (multi-village) | ✅ (multi-GP) | ✅ (district-wide) |
-| Create sub-admin accounts | ❌ | ✅ (creates panchayat_admin) | ✅ (creates gram_panchayat) | ✅ (creates block_samiti) |
+| Create sub-admin accounts | ❌ | ✅ (creates ward_member) | ✅ (creates gram_panchayat) | ✅ (creates block_samiti) |
 | View escalations | ❌ | ✅ | ✅ | ✅ |
 
 ---
@@ -234,12 +234,12 @@ apps/admin-app/src/
 │   ├── Login.jsx
 │   ├── Dashboard.jsx           # Home/overview page
 │   ├── BinMap.jsx              # Map of all bins in jurisdiction
-│   ├── TaskManagement.jsx      # List + manage tasks (panchayat_admin only)
-│   ├── WorkerManagement.jsx    # List + create workers (panchayat_admin only)
-│   ├── IssueManagement.jsx     # User-reported issues (panchayat_admin only)
+│   ├── TaskManagement.jsx      # List + manage tasks (ward_member only)
+│   ├── WorkerManagement.jsx    # List + create workers (ward_member only)
+│   ├── IssueManagement.jsx     # User-reported issues (ward_member only)
 │   ├── Announcements.jsx       # Post/manage announcements (all roles)
 │   ├── Reports.jsx             # Analytics and SLA reports (all roles)
-│   ├── HierarchyManagement.jsx # Create sub-admin accounts (all except panchayat_admin)
+│   ├── HierarchyManagement.jsx # Create sub-admin accounts (all except ward_member)
 │   └── EscalationPanel.jsx     # View escalated issues (gram_panchayat and above)
 ├── routes/
 │   └── AppRoutes.jsx
@@ -328,10 +328,10 @@ export default function AppRoutes() {
         <Route path="bins" element={<BinMap />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="reports" element={<Reports />} />
-        {/* panchayat_admin only */}
-        <Route path="tasks" element={<RoleGate allowedRoles={['panchayat_admin']}><TaskManagement /></RoleGate>} />
-        <Route path="workers" element={<RoleGate allowedRoles={['panchayat_admin']}><WorkerManagement /></RoleGate>} />
-        <Route path="issues" element={<RoleGate allowedRoles={['panchayat_admin']}><IssueManagement /></RoleGate>} />
+        {/* ward_member only */}
+        <Route path="tasks" element={<RoleGate allowedRoles={['ward_member']}><TaskManagement /></RoleGate>} />
+        <Route path="workers" element={<RoleGate allowedRoles={['ward_member']}><WorkerManagement /></RoleGate>} />
+        <Route path="issues" element={<RoleGate allowedRoles={['ward_member']}><IssueManagement /></RoleGate>} />
         {/* gram_panchayat and above */}
         <Route path="escalations" element={<RoleGate allowedRoles={['gram_panchayat','block_samiti','zilla_parishad']}><EscalationPanel /></RoleGate>} />
         <Route path="hierarchy" element={<RoleGate allowedRoles={['gram_panchayat','block_samiti','zilla_parishad']}><HierarchyManagement /></RoleGate>} />
@@ -383,9 +383,9 @@ import { LayoutDashboard, Map, ClipboardList, Users, AlertCircle, Megaphone, Bar
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['all'] },
   { path: '/bins', label: 'Bin Map', icon: Map, roles: ['all'] },
-  { path: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['panchayat_admin'] },
-  { path: '/workers', label: 'Workers', icon: Users, roles: ['panchayat_admin'] },
-  { path: '/issues', label: 'Issues', icon: AlertCircle, roles: ['panchayat_admin'] },
+  { path: '/tasks', label: 'Tasks', icon: ClipboardList, roles: ['ward_member'] },
+  { path: '/workers', label: 'Workers', icon: Users, roles: ['ward_member'] },
+  { path: '/issues', label: 'Issues', icon: AlertCircle, roles: ['ward_member'] },
   { path: '/escalations', label: 'Escalations', icon: ArrowUpCircle, roles: ['gram_panchayat', 'block_samiti', 'zilla_parishad'] },
   { path: '/hierarchy', label: 'Manage Admins', icon: GitBranch, roles: ['gram_panchayat', 'block_samiti', 'zilla_parishad'] },
   { path: '/announcements', label: 'Announcements', icon: Megaphone, roles: ['all'] },
@@ -451,7 +451,7 @@ export default function Sidebar() {
   - Bins needing attention (fill_level > 80)
   - Tasks today (created today)
   - Open issues (status = open)
-- For `panchayat_admin`: also show "Workers Active Today".
+- For `ward_member`: also show "Workers Active Today".
 - For higher roles: stat cards show aggregated numbers from all jurisdictions below.
 - Recent Activity table (`admin-table`):
   - Columns: Type, Description, Location, Status, Time
@@ -474,7 +474,7 @@ export default function Sidebar() {
 - Bin markers color-coded same as user app.
 - Clicking marker → side panel slides in (right side, 300px) showing:
   - Bin label, fill level bar, last updated time.
-  - For `panchayat_admin`: "Create Cleanup Task" button → opens task creation modal pre-filled with bin location.
+  - For `ward_member`: "Create Cleanup Task" button → opens task creation modal pre-filled with bin location.
 - Below map: Bins list table with sort by fill level.
 
 **Data:** `GET /api/bins?village_id={admin's jurisdiction village IDs}`
@@ -483,7 +483,7 @@ export default function Sidebar() {
 
 ### TaskManagement.jsx
 
-**Route:** `/tasks` | **Visible to:** `panchayat_admin` only
+**Route:** `/tasks` | **Visible to:** `ward_member` only
 
 **Layout:**
 - Page title: "Task Management".
@@ -496,7 +496,7 @@ export default function Sidebar() {
   - Fields: Title, Type (dropdown), Description, Location (map pin picker), Priority (1/2/3), Assign Worker (dropdown of active workers), Due Date.
 
 **Data:**
-- `GET /api/tasks` (filtered to panchayat_admin's jurisdiction)
+- `GET /api/tasks` (filtered to ward_member's jurisdiction)
 - `POST /api/tasks` (create)
 - `PATCH /api/tasks/:id/assign` (assign worker)
 
@@ -504,7 +504,7 @@ export default function Sidebar() {
 
 ### WorkerManagement.jsx
 
-**Route:** `/workers` | **Visible to:** `panchayat_admin` only
+**Route:** `/workers` | **Visible to:** `ward_member` only
 
 **Layout:**
 - Page title: "Safai Mitra Workers".
@@ -526,7 +526,7 @@ export default function Sidebar() {
 
 ### IssueManagement.jsx
 
-**Route:** `/issues` | **Visible to:** `panchayat_admin` only
+**Route:** `/issues` | **Visible to:** `ward_member` only
 
 **Layout:**
 - Page title: "Resident Issue Reports".
@@ -574,7 +574,7 @@ export default function Sidebar() {
 **Layout:**
 - Page title: "Reports & Analytics".
 - Date range picker (This Week / This Month / Custom).
-- For `panchayat_admin` — shows:
+- For `ward_member` — shows:
   - Tasks completed vs pending (bar chart).
   - Bin fill level history (line chart for top 5 bins).
   - Worker performance table: worker name, tasks assigned, tasks completed, completion rate %.
@@ -605,7 +605,7 @@ export default function Sidebar() {
 - Creation Modal:
   - Name, Email, Password, Jurisdiction Name, (optional) Jurisdiction GeoJSON.
   - Password confirmation field.
-  - Role label shown read-only (e.g., "This account will be created as: Panchayat Admin").
+  - Role label shown read-only (e.g., "This account will be created as: Ward Member").
 
 **Data:**
 - `GET /api/admin/sub-admins`
@@ -632,7 +632,7 @@ export default function Sidebar() {
 
 ## Role-Aware Sidebar Navigation Summary
 
-| Nav Item | panchayat_admin | gram_panchayat | block_samiti | zilla_parishad |
+| Nav Item | ward_member | gram_panchayat | block_samiti | zilla_parishad |
 |---|---|---|---|---|
 | Dashboard | ✅ | ✅ | ✅ | ✅ |
 | Bin Map | ✅ | ✅ | ✅ | ✅ |

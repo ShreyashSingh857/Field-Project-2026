@@ -12,6 +12,102 @@ const ROLE_CHILD = {
 
 const router = Router();
 
+const GEO_STORAGE_URL = (process.env.VITE_GEO_STORAGE_URL || `${process.env.SUPABASE_URL}/storage/v1/object/public/geo`).replace(/\/$/, '');
+const MH_STATE_CODE = '27';
+
+async function fetchGeoFeatureByPath(relativePath, properties = {}) {
+  const url = `${GEO_STORAGE_URL}/${relativePath}.geojson`;
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  const geojson = await resp.json();
+  if (!geojson?.geometry) return null;
+  return {
+    type: 'Feature',
+    properties: {
+      ...(geojson.properties || {}),
+      ...properties,
+      source: 'supabase-storage/geo',
+    },
+    geometry: geojson.geometry,
+  };
+}
+
+async function resolveJurisdictionCode(role, lgdCode, jurisdictionName) {
+  if (lgdCode) return String(lgdCode);
+
+  const fullName = String(jurisdictionName || '').trim();
+  const term = fullName.split(' ')[0];
+  if (!term && !fullName) return null;
+
+  const findCode = async (table) => {
+    if (fullName) {
+      const exact = await supabaseAdmin
+        .from(table)
+        .select('census_code')
+        .eq('name', fullName)
+        .limit(1)
+        .maybeSingle();
+      if (exact.data?.census_code) return String(exact.data.census_code);
+    }
+
+    const fuzzy = await supabaseAdmin
+      .from(table)
+      .select('census_code')
+      .ilike('name', `%${term || fullName}%`)
+      .limit(1)
+      .maybeSingle();
+    return fuzzy.data?.census_code ? String(fuzzy.data.census_code) : null;
+  };
+
+  if (role === 'zilla_parishad') {
+    return findCode('geo_districts');
+  }
+
+  if (role === 'block_samiti') {
+    return findCode('geo_blocks');
+  }
+
+  if (role === 'gram_panchayat') {
+    return findCode('geo_gram_panchayats');
+  }
+
+  return null;
+}
+
+async function resolveGeoRow(table, lgdCode, jurisdictionName) {
+  const fullName = String(jurisdictionName || '').trim();
+  const code = String(lgdCode || '').trim();
+
+  if (code) {
+    const exactByCode = await supabaseAdmin
+      .from(table)
+      .select('id,name,census_code')
+      .eq('census_code', code)
+      .maybeSingle();
+    if (exactByCode.data) return exactByCode.data;
+  }
+
+  if (fullName) {
+    const exactByName = await supabaseAdmin
+      .from(table)
+      .select('id,name,census_code')
+      .eq('name', fullName)
+      .maybeSingle();
+    if (exactByName.data) return exactByName.data;
+  }
+
+  const term = fullName.split(' ')[0] || code;
+  if (!term) return null;
+
+  const fuzzy = await supabaseAdmin
+    .from(table)
+    .select('id,name,census_code')
+    .ilike('name', `%${term}%`)
+    .limit(1)
+    .maybeSingle();
+  return fuzzy.data || null;
+}
+
 async function getAdminRow(adminId) {
   const { data, error } = await supabaseAdmin
     .from('admins')
@@ -179,66 +275,56 @@ router.get('/jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
   try {
     const role = req.admin.role;
     const jurisdictionName = req.admin.jurisdiction_name || '';
-    const lgdCode = req.admin.lgd_jurisdiction_code || null;
+    const lgdCode = await resolveJurisdictionCode(role, req.admin.lgd_jurisdiction_code, jurisdictionName);
 
     // ward_member has no boundary polygon
     if (role === 'ward_member') {
       return res.json({ boundary: null });
     }
 
-    let table, nameField, codeField, levelLabel;
+    if (!lgdCode) return res.json({ boundary: null, message: 'Jurisdiction code not found' });
+
     if (role === 'zilla_parishad') {
-      table = 'geo_districts'; nameField = 'name';
-      codeField = 'census_code'; levelLabel = 'district';
-    } else if (role === 'block_samiti') {
-      table = 'geo_blocks'; nameField = 'name';
-      codeField = 'census_code'; levelLabel = 'block';
-    } else if (role === 'gram_panchayat') {
-      table = 'geo_gram_panchayats'; nameField = 'name';
-      codeField = 'census_code'; levelLabel = 'gp';
-    } else {
-      return res.json({ boundary: null });
+      const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${lgdCode}`, {
+        name: jurisdictionName,
+        lgd_code: lgdCode,
+        level: 'district',
+      });
+      return res.json({ boundary: feature });
     }
 
-    let data, error;
+    if (role === 'block_samiti') {
+      const { data: block } = await supabaseAdmin
+        .from('geo_blocks')
+        .select('district_census_code')
+        .eq('census_code', lgdCode)
+        .maybeSingle();
+      if (!block?.district_census_code) return res.json({ boundary: null });
 
-    // Try by LGD code first (exact match)
-    if (lgdCode) {
-      ({ data, error } = await supabaseAdmin
-        .from(table)
-        .select(`id, name, ${codeField}, boundary_geojson, centroid_lat, centroid_lng`)
-        .eq(codeField, lgdCode)
-        .maybeSingle());
+      const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${block.district_census_code}/${lgdCode}`, {
+        name: jurisdictionName,
+        lgd_code: lgdCode,
+        level: 'block',
+      });
+      return res.json({ boundary: feature });
     }
 
-    // Fall back to name fuzzy match
-    if (!data && jurisdictionName) {
-      ({ data, error } = await supabaseAdmin
-        .from(table)
-        .select(`id, name, ${codeField}, boundary_geojson, centroid_lat, centroid_lng`)
-        .ilike(nameField, `%${jurisdictionName.split(' ')[0]}%`)
-        .maybeSingle());
+    if (role === 'gram_panchayat') {
+      const { data: gp } = await supabaseAdmin
+        .from('geo_gram_panchayats')
+        .select('district_census_code, block_census_code')
+        .eq('census_code', lgdCode)
+        .maybeSingle();
+      if (!gp?.district_census_code || !gp?.block_census_code) return res.json({ boundary: null });
+
+      const feature = await fetchGeoFeatureByPath(
+        `${MH_STATE_CODE}/${gp.district_census_code}/${gp.block_census_code}/${lgdCode}`,
+        { name: jurisdictionName, lgd_code: lgdCode, level: 'gp' }
+      );
+      return res.json({ boundary: feature });
     }
 
-    if (error) throw error;
-
-    if (!data || !data.boundary_geojson) {
-      // No boundary data in DB yet — return null gracefully
-      return res.json({ boundary: null, message: 'Boundary data not yet available for this jurisdiction' });
-    }
-
-    const feature = {
-      type: 'Feature',
-      properties: {
-        name: data.name,
-        lgd_code: data[codeField],
-        level: levelLabel,
-        source: 'lgdirectory.nic.in / NIC Bharat Map Services',
-      },
-      geometry: data.boundary_geojson,
-    };
-
-    return res.json({ boundary: feature });
+    return res.json({ boundary: null });
   } catch (err) {
     console.error('[jurisdiction-boundary]', err.message);
     return res.status(500).json({ error: err.message || 'Failed to fetch boundary' });
@@ -253,65 +339,83 @@ router.get('/jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
 router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
   try {
     const role = req.admin.role;
-    const lgdCode = req.admin.lgd_jurisdiction_code || null;
     const jurisdictionName = req.admin.jurisdiction_name || '';
+    const district = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, jurisdictionName);
+    const block = await resolveGeoRow('geo_blocks', req.admin.lgd_jurisdiction_code, jurisdictionName);
 
     let features = [];
 
     if (role === 'zilla_parishad') {
-      // Fetch all blocks in this district
-      let query = supabaseAdmin
+      if (!district?.id) return res.json({ type: 'FeatureCollection', features: [], count: 0 });
+
+      const { data: blocks, error: blockError } = await supabaseAdmin
         .from('geo_blocks')
-        .select('name, census_code, boundary_geojson, centroid_lat, centroid_lng');
-      if (lgdCode) {
-        query = query.eq('district_census_code', lgdCode);
-      } else {
-        // Fuzzy match via district name
-        const distMatch = await supabaseAdmin
-          .from('geo_districts')
-          .select('census_code')
-          .ilike('name', `%${jurisdictionName.split(' ')[0]}%`)
-          .maybeSingle();
-        if (distMatch.data?.census_code) {
-          query = query.eq('district_census_code', distMatch.data.census_code);
-        }
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      features = (data || [])
-        .filter(r => r.boundary_geojson)
-        .map(r => ({
-          type: 'Feature',
-          properties: { name: r.name, lgd_code: r.census_code, level: 'block' },
-          geometry: r.boundary_geojson,
-        }));
+        .select('id, name, census_code, district_id')
+        .eq('district_id', district.id);
+      if (blockError) throw blockError;
+
+      const blockCodeById = new Map((blocks || []).map((b) => [b.id, b.census_code]));
+
+      const blockFeatures = await Promise.all(
+        (blocks || []).map((b) =>
+          fetchGeoFeatureByPath(`${MH_STATE_CODE}/${district.census_code}/${b.census_code}`, {
+            name: b.name,
+            lgd_code: b.census_code,
+            level: 'block',
+            district_code: district.census_code,
+          })
+        )
+      );
+
+      const { data: gps, error: gpError } = await supabaseAdmin
+        .from('geo_gram_panchayats')
+        .select('name, census_code, block_id, district_id');
+      if (gpError) throw gpError;
+
+      const gpFeatures = await Promise.all(
+        (gps || []).map((g) =>
+          fetchGeoFeatureByPath(`${MH_STATE_CODE}/${district.census_code}/${blockCodeById.get(g.block_id) || ''}/${g.census_code}`, {
+            name: g.name,
+            lgd_code: g.census_code,
+            level: 'gp',
+            block_code: blockCodeById.get(g.block_id) || '',
+            district_code: district.census_code,
+          })
+        )
+      );
+
+      features = [...blockFeatures, ...gpFeatures].filter(Boolean);
 
     } else if (role === 'block_samiti') {
-      // Fetch all GPs in this block
-      let query = supabaseAdmin
+      if (!block?.id || !district?.census_code) return res.json({ type: 'FeatureCollection', features: [], count: 0 });
+
+      const { data: blockRow, error: blockErr } = await supabaseAdmin
+        .from('geo_blocks')
+        .select('id, census_code, district_id')
+        .eq('id', block.id)
+        .maybeSingle();
+      if (blockErr) throw blockErr;
+      if (!blockRow?.district_id) return res.json({ type: 'FeatureCollection', features: [], count: 0 });
+
+      const { data: gps, error: gpError } = await supabaseAdmin
         .from('geo_gram_panchayats')
-        .select('name, census_code, boundary_geojson, centroid_lat, centroid_lng');
-      if (lgdCode) {
-        query = query.eq('block_census_code', lgdCode);
-      } else {
-        const blockMatch = await supabaseAdmin
-          .from('geo_blocks')
-          .select('census_code')
-          .ilike('name', `%${jurisdictionName.split(' ')[0]}%`)
-          .maybeSingle();
-        if (blockMatch.data?.census_code) {
-          query = query.eq('block_census_code', blockMatch.data.census_code);
-        }
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      features = (data || [])
-        .filter(r => r.boundary_geojson)
-        .map(r => ({
-          type: 'Feature',
-          properties: { name: r.name, lgd_code: r.census_code, level: 'gp' },
-          geometry: r.boundary_geojson,
-        }));
+        .select('name, census_code, block_id')
+        .eq('block_id', block.id);
+      if (gpError) throw gpError;
+
+      const gpFeatures = await Promise.all(
+        (gps || []).map((g) =>
+          fetchGeoFeatureByPath(`${MH_STATE_CODE}/${district.census_code}/${blockRow.census_code}/${g.census_code}`, {
+            name: g.name,
+            lgd_code: g.census_code,
+            level: 'gp',
+            block_code: blockRow.census_code,
+            district_code: district.census_code,
+          })
+        )
+      );
+
+      features = gpFeatures.filter(Boolean);
     }
 
     return res.json({
@@ -345,6 +449,50 @@ router.get('/sub-jurisdictions', verifyAdminJWT, async (req, res) => {
   } catch (err) {
     console.error('[sub-jurisdictions]', err.message);
     return res.status(500).json({ error: err.message || 'Failed to fetch sub-jurisdictions' });
+  }
+});
+
+// GET /api/admin/child-jurisdiction-options
+// Returns child jurisdiction options with LGD code for Create Admin form.
+router.get('/child-jurisdiction-options', verifyAdminJWT, async (req, res) => {
+  try {
+    const role = req.admin.role;
+    const parentDistrict = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
+    const parentBlock = await resolveGeoRow('geo_blocks', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
+
+    if (!parentDistrict && !parentBlock) {
+      return res.json({ options: [], childRole: ROLE_CHILD[role] || null });
+    }
+
+    if (role === 'zilla_parishad') {
+      const { data, error } = await supabaseAdmin
+        .from('geo_blocks')
+        .select('name,census_code,id')
+        .eq('district_id', parentDistrict.id)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return res.json({
+        childRole: 'block_samiti',
+        options: (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code })),
+      });
+    }
+
+    if (role === 'block_samiti') {
+      const { data, error } = await supabaseAdmin
+        .from('geo_gram_panchayats')
+        .select('name,census_code,id')
+        .eq('block_id', parentBlock.id)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return res.json({
+        childRole: 'gram_panchayat',
+        options: (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code })),
+      });
+    }
+
+    return res.json({ options: [], childRole: ROLE_CHILD[role] || null });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch child jurisdiction options' });
   }
 });
 

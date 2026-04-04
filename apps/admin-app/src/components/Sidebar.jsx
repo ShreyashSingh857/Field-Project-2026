@@ -32,19 +32,19 @@ const NAV_ITEMS = [
         path: '/tasks',
         label: 'Tasks',
         icon: ClipboardList,
-        roles: ['panchayat_admin'],
+        roles: ['ward_member'],
     },
     {
         path: '/workers',
         label: 'Workers',
         icon: Users,
-        roles: ['panchayat_admin'],
+        roles: ['ward_member'],
     },
     {
         path: '/issues',
         label: 'Issues',
         icon: AlertCircle,
-        roles: ['panchayat_admin'],
+        roles: ['ward_member'],
     },
     {
         path: '/escalations',
@@ -82,13 +82,13 @@ function Sidebar() {
     );
 
         const roleBadge = {
-            panchayat_admin: { bg: '#E8F5E9', text: '#2E7D32', label: 'Panchayat Admin' },
+            ward_member: { bg: '#E8F5E9', text: '#2E7D32', label: 'Ward Member' },
             gram_panchayat: { bg: '#E3F2FD', text: '#1565C0', label: 'Gram Panchayat' },
             block_samiti: { bg: '#FFF8E1', text: '#F57F17', label: 'Block Samiti' },
             zilla_parishad: { bg: '#FCE4EC', text: '#880E4F', label: 'Zilla Parishad' },
         }[role] || { bg: '#f3f4f6', text: '#374151', label: 'Admin' };
 
-        const hierarchy = ['zilla_parishad', 'block_samiti', 'gram_panchayat', 'panchayat_admin'];
+        const hierarchy = ['zilla_parishad', 'block_samiti', 'gram_panchayat', 'ward_member'];
 
     const handleLogout = () => {
         dispatch(logout());
