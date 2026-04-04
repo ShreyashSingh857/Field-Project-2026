@@ -20,6 +20,7 @@ import sys
 import tempfile
 import json
 import time
+from pathlib import Path
 
 import geopandas as gpd
 import requests
@@ -45,6 +46,18 @@ SEED_DISTRICT_OFFSET = int(os.getenv('SEED_DISTRICT_OFFSET', '0'))
 SEED_MAX_DISTRICTS = int(os.getenv('SEED_MAX_DISTRICTS', '0'))
 SEED_DISTRICT_SLEEP_SEC = float(os.getenv('SEED_DISTRICT_SLEEP_SEC', '0.2'))
 SEED_VERIFY_SSL = os.getenv('SEED_VERIFY_SSL', '1') != '0'
+SEED_CACHE_DIR = os.getenv(
+    'SEED_CACHE_DIR',
+    str(Path(__file__).resolve().parents[1] / 'data' / 'geo-cache'),
+)
+SEED_BATCH_SIZE_SMALL = int(os.getenv('SEED_BATCH_SIZE_SMALL', '150'))
+SEED_BATCH_SIZE_GP = int(os.getenv('SEED_BATCH_SIZE_GP', '250'))
+SEED_INCLUDE_BLOCKS = os.getenv('SEED_INCLUDE_BLOCKS', '1') != '0'
+SEED_INCLUDE_PANCHAYATS = os.getenv('SEED_INCLUDE_PANCHAYATS', '1') != '0'
+SEED_FAST_MODE = os.getenv('SEED_FAST_MODE', '0') != '0'
+SEED_SIMPLIFY_GEOMETRY = os.getenv('SEED_SIMPLIFY_GEOMETRY', '1') != '0'
+SEED_COMPUTE_CENTROID = os.getenv('SEED_COMPUTE_CENTROID', '1') != '0'
+SEED_UPDATE_DEMO_VILLAGE = os.getenv('SEED_UPDATE_DEMO_VILLAGE', '0') != '0'
 
 DISTRICTS_GEOJSON_URL = (
     'https://yashveeeeeer.github.io/india-geodata/districts.geojson'
@@ -103,12 +116,34 @@ def fetch_json(url, params=None, timeout=60, retries=2):
     return {}
 
 
-def fetch_release_geojson(tag, asset_name):
-    try:
-        import py7zr
-    except Exception as e:
-        print(f'  WARN py7zr unavailable: {e}')
-        return None
+def get_cached_archive_path(tag, asset_name):
+    cache_dir = Path(SEED_CACHE_DIR)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{tag.replace('/', '_')}__{asset_name}"
+    return cache_dir / safe_name
+
+
+def download_release_archive(asset_url, dest_path):
+    tmp_path = str(dest_path) + '.part'
+    resp = requests.get(
+        asset_url,
+        headers={'Accept': 'application/octet-stream'},
+        stream=True,
+        timeout=120,
+        verify=SEED_VERIFY_SSL,
+    )
+    if resp.status_code != 200:
+        print(f'  WARN release download failed: HTTP {resp.status_code}')
+        return False
+    with open(tmp_path, 'wb') as fh:
+        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                fh.write(chunk)
+    os.replace(tmp_path, dest_path)
+    return True
+
+
+def get_release_asset_url(tag, asset_name):
     release = fetch_json(
         f'https://api.github.com/repos/yashveeeeeeer/india-geodata/releases/tags/{tag}',
         timeout=60,
@@ -117,23 +152,31 @@ def fetch_release_geojson(tag, asset_name):
     if not asset:
         print(f'  WARN release asset not found: {tag}/{asset_name}')
         return None
-    asset_url = asset.get('url')
+    return asset.get('url')
+
+
+def ensure_release_asset_cached(tag, asset_name):
+    archive_path = get_cached_archive_path(tag, asset_name)
+    if archive_path.exists():
+        return str(archive_path)
+    asset_url = get_release_asset_url(tag, asset_name)
+    if not asset_url:
+        return None
+    print(f'  Downloading release asset: {tag}/{asset_name}')
+    ok = download_release_archive(asset_url, str(archive_path))
+    return str(archive_path) if ok else None
+
+
+def fetch_release_geojson(tag, asset_name):
+    try:
+        import py7zr
+    except Exception as e:
+        print(f'  WARN py7zr unavailable: {e}')
+        return None
+    archive_path = ensure_release_asset_cached(tag, asset_name)
+    if not archive_path:
+        return None
     with tempfile.TemporaryDirectory() as tmpdir:
-        archive_path = os.path.join(tmpdir, 'data.7z')
-        resp = requests.get(
-            asset_url,
-            headers={'Accept': 'application/octet-stream'},
-            stream=True,
-            timeout=120,
-            verify=SEED_VERIFY_SSL,
-        )
-        if resp.status_code != 200:
-            print(f'  WARN release download failed: HTTP {resp.status_code}')
-            return None
-        with open(archive_path, 'wb') as fh:
-            for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    fh.write(chunk)
         with py7zr.SevenZipFile(archive_path, mode='r') as zf:
             zf.extractall(path=tmpdir)
         for root, _, files in os.walk(tmpdir):
@@ -148,6 +191,36 @@ def fetch_release_geojson(tag, asset_name):
                                 features.append(json.loads(line))
                     return {'type': 'FeatureCollection', 'features': features}
     return None
+
+
+def iter_release_geojsonl_features(tag, asset_name):
+    try:
+        import py7zr
+    except Exception as e:
+        print(f'  WARN py7zr unavailable: {e}')
+        return
+    archive_path = ensure_release_asset_cached(tag, asset_name)
+    if not archive_path:
+        return
+    if not os.path.exists(archive_path):
+        data = fetch_release_geojson(tag, asset_name)
+        if not data:
+            return
+        for feature in data.get('features', []):
+            yield feature
+        return
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with py7zr.SevenZipFile(archive_path, mode='r') as zf:
+            zf.extractall(path=tmpdir)
+        for root, _, files in os.walk(tmpdir):
+            for name in files:
+                if name.endswith('.geojsonl'):
+                    path = os.path.join(root, name)
+                    with open(path, 'r', encoding='utf-8') as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if line:
+                                yield json.loads(line)
 
 
 def fetch_district_pairs_from_nic():
@@ -224,6 +297,8 @@ def simplify_geometry(geojson_geom, tolerance=0.01):
     tolerance=0.01 degrees ≈ ~1km. Reduces polygon vertex count
     dramatically for web rendering performance.
     """
+    if SEED_FAST_MODE or not SEED_SIMPLIFY_GEOMETRY:
+        return geojson_geom
     try:
         geom = shape(geojson_geom)
         simplified = geom.simplify(tolerance, preserve_topology=True)
@@ -234,6 +309,8 @@ def simplify_geometry(geojson_geom, tolerance=0.01):
 
 def get_centroid(geojson_geom):
     """Return (lat, lng) centroid of a GeoJSON geometry."""
+    if SEED_FAST_MODE or not SEED_COMPUTE_CENTROID:
+        return None, None
     try:
         geom = shape(geojson_geom)
         c = geom.centroid
@@ -293,7 +370,7 @@ def fetch_districts_geojson():
     return None
 
 
-def seed_districts(state_id_map, districts_geojson, nic_pairs=None):
+def seed_districts(state_id_map, districts_geojson, nic_pairs=None, selected_districts=None):
     print('\n[2/4] Seeding all district boundaries...')
     features = districts_geojson.get('features', []) if districts_geojson else []
     print(f'  Found {len(features)} district features')
@@ -317,6 +394,8 @@ def seed_districts(state_id_map, districts_geojson, nic_pairs=None):
         )
         census_code = norm_code(props.get('dt_code') or props.get('dtcode11') or props.get('DT_CEN_CD'))
         state_census_code = norm_code(props.get('st_code') or props.get('stcode11') or props.get('ST_CEN_CD'), 2)
+        if selected_districts and (state_census_code, census_code) not in selected_districts:
+            continue
         state_id = state_id_map.get(state_census_code)
         if not census_code or not state_census_code or not state_id:
             continue
@@ -535,18 +614,24 @@ def seed_blocks_and_gps(district_census_code, state_census_code, gp_features):
     print(f'  Inserted {inserted_gps} gram panchayats')
 
 
-def seed_blocks_from_release(blocks_geojson, district_id_map):
+def seed_blocks_from_release(district_id_map, selected_districts=None):
     print('\n[3/4] Seeding blocks from release asset...')
     rows = []
-    for feat in blocks_geojson.get('features', []):
+    inserted = 0
+    seen = 0
+    for feat in iter_release_geojsonl_features(BLOCKS_RELEASE_TAG, BLOCKS_RELEASE_ASSET):
+        seen += 1
         props = feat.get('properties', {})
         geom = feat.get('geometry')
         st_code = norm_code(props.get('stcode11') or props.get('state_lgd'), 2)
         dt_code = norm_code(props.get('dtcode11') or props.get('dist_lgd'))
+        if selected_districts and (st_code, dt_code) not in selected_districts:
+            continue
         block_code = norm_code(props.get('block_lgd') or props.get('blkcode11'))
         district_id = district_id_map.get((st_code, dt_code))
         if not (geom and st_code and dt_code and block_code and district_id):
             continue
+        centroid_lat, centroid_lng = get_centroid(geom)
         rows.append({
             'name': str(props.get('block_name') or props.get('block') or 'Unknown').strip().title(),
             'district_id': district_id,
@@ -554,35 +639,49 @@ def seed_blocks_from_release(blocks_geojson, district_id_map):
             'state_census_code': st_code,
             'district_census_code': dt_code,
             'boundary_geojson': simplify_geometry(geom, 0.003),
-            'centroid_lat': get_centroid(geom)[0],
-            'centroid_lng': get_centroid(geom)[1],
+            'centroid_lat': centroid_lat,
+            'centroid_lng': centroid_lng,
         })
-    inserted = 0
-    for i in range(0, len(rows), 100):
+        if len(rows) >= SEED_BATCH_SIZE_SMALL:
+            inserted += supabase_upsert(
+                'geo_blocks',
+                rows,
+                ['census_code', 'district_census_code'],
+            )
+            rows = []
+        if seen % 500 == 0:
+            print(f'  Block scan progress: {seen}')
+    if rows:
         inserted += supabase_upsert(
             'geo_blocks',
-            rows[i:i + 100],
+            rows,
             ['census_code', 'district_census_code'],
         )
     print(f'  Inserted/updated {inserted} blocks')
 
 
-def seed_panchayats_from_release(panchayats_geojson, district_id_map):
+def seed_panchayats_from_release(district_id_map, selected_districts=None):
     print('\n[3/4] Seeding gram panchayats from release asset...')
     block_rows = supabase_select('geo_blocks', select='id,census_code,state_census_code,district_census_code')
     block_id_map = {(b.get('state_census_code'), b.get('district_census_code'), b.get('census_code')): b.get('id') for b in block_rows}
     rows = []
-    for feat in panchayats_geojson.get('features', []):
+    inserted = 0
+    seen = 0
+    for feat in iter_release_geojsonl_features(PANCHAYATS_RELEASE_TAG, PANCHAYATS_RELEASE_ASSET):
+        seen += 1
         props = feat.get('properties', {})
         geom = feat.get('geometry')
         st_code = norm_code(props.get('stcode11') or props.get('state_lgd'), 2)
         dt_code = norm_code(props.get('dtcode11') or props.get('dt_lgd'))
+        if selected_districts and (st_code, dt_code) not in selected_districts:
+            continue
         block_code = norm_code(props.get('blklgdcode') or props.get('blk_lgdcod') or props.get('block_lgd'))
         gp_code = norm_code(props.get('gpcode') or props.get('gp_code'))
         district_id = district_id_map.get((st_code, dt_code))
         block_id = block_id_map.get((st_code, dt_code, block_code))
         if not (geom and gp_code and district_id):
             continue
+        centroid_lat, centroid_lng = get_centroid(geom)
         rows.append({
             'name': str(props.get('gpname') or props.get('gp_name') or props.get('b_pan_name') or 'Unknown').strip().title(),
             'block_id': block_id,
@@ -592,12 +691,24 @@ def seed_panchayats_from_release(panchayats_geojson, district_id_map):
             'district_census_code': dt_code,
             'block_census_code': block_code,
             'boundary_geojson': simplify_geometry(geom, 0.001),
-            'centroid_lat': get_centroid(geom)[0],
-            'centroid_lng': get_centroid(geom)[1],
+            'centroid_lat': centroid_lat,
+            'centroid_lng': centroid_lng,
         })
-    inserted = 0
-    for i in range(0, len(rows), 100):
-        inserted += supabase_upsert('geo_gram_panchayats', rows[i:i + 100], ['census_code'])
+        if len(rows) >= SEED_BATCH_SIZE_GP:
+            inserted += supabase_upsert(
+                'geo_gram_panchayats',
+                rows,
+                ['census_code'],
+            )
+            rows = []
+        if seen % 2000 == 0:
+            print(f'  Panchayat scan progress: {seen}')
+    if rows:
+        inserted += supabase_upsert(
+            'geo_gram_panchayats',
+            rows,
+            ['census_code'],
+        )
     print(f'  Inserted/updated {inserted} gram panchayats')
 
 
@@ -659,6 +770,11 @@ def collect_district_pairs(districts_geojson, nic_pairs=None):
     return ordered
 
 
+def build_selected_district_set(districts_geojson, nic_pairs=None):
+    pairs = collect_district_pairs(districts_geojson, nic_pairs)
+    return set(pairs)
+
+
 # ── Main ─────────────────────────────────────────────────────
 
 def main():
@@ -670,19 +786,23 @@ def main():
     nic_pairs = None
     if not districts_geojson:
         nic_pairs = fetch_district_pairs_from_nic()
-    blocks_geojson = fetch_release_geojson(BLOCKS_RELEASE_TAG, BLOCKS_RELEASE_ASSET)
-    panchayats_geojson = fetch_release_geojson(PANCHAYATS_RELEASE_TAG, PANCHAYATS_RELEASE_ASSET)
+    blocks_asset = ensure_release_asset_cached(BLOCKS_RELEASE_TAG, BLOCKS_RELEASE_ASSET) if SEED_INCLUDE_BLOCKS else None
+    panchayats_asset = ensure_release_asset_cached(PANCHAYATS_RELEASE_TAG, PANCHAYATS_RELEASE_ASSET) if SEED_INCLUDE_PANCHAYATS else None
 
+    selected_districts = build_selected_district_set(districts_geojson, nic_pairs)
+    print(f'  Selected district pairs for this run: {len(selected_districts)}')
     state_id_map = seed_states_from_districts(districts_geojson, nic_pairs)
-    seed_districts(state_id_map, districts_geojson, nic_pairs)
+    seed_districts(state_id_map, districts_geojson, nic_pairs, selected_districts)
     district_rows = supabase_select('geo_districts', select='id,census_code,state_census_code')
     district_id_map = {(d.get('state_census_code'), d.get('census_code')): d.get('id') for d in district_rows}
 
-    if blocks_geojson:
-        seed_blocks_from_release(blocks_geojson, district_id_map)
-    if panchayats_geojson:
-        seed_panchayats_from_release(panchayats_geojson, district_id_map)
-    if not blocks_geojson or not panchayats_geojson:
+    if SEED_INCLUDE_BLOCKS and blocks_asset:
+        seed_blocks_from_release(district_id_map, selected_districts)
+    if SEED_INCLUDE_PANCHAYATS and panchayats_asset:
+        seed_panchayats_from_release(district_id_map, selected_districts)
+    needs_block_fallback = SEED_INCLUDE_BLOCKS and not blocks_asset
+    needs_gp_fallback = SEED_INCLUDE_PANCHAYATS and not panchayats_asset
+    if needs_block_fallback or needs_gp_fallback:
         district_pairs = collect_district_pairs(districts_geojson, nic_pairs)
         print(f'\n[3/4] Fallback GP fetch for {len(district_pairs)} districts...')
         for idx, (state_code, district_code) in enumerate(district_pairs, start=1):
@@ -691,7 +811,8 @@ def main():
             seed_blocks_and_gps(district_code, state_code, gp_features)
             time.sleep(SEED_DISTRICT_SLEEP_SEC)
 
-    update_demo_village()
+    if SEED_UPDATE_DEMO_VILLAGE:
+        update_demo_village()
 
     print('\n' + '=' * 60)
     print('Seeding complete.')

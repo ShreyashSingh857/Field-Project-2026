@@ -7,7 +7,12 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed:demo": "node src/scripts/seedDemoAdmins.js",
-    "seed:geo": "python scripts/seed_geo_boundaries.py"
+    "seed:geo": "..\\.venv\\Scripts\\python.exe scripts/seed_geo_boundaries.py",
+    "seed:geo:fast": "set SEED_FAST_MODE=1&& set SEED_SIMPLIFY_GEOMETRY=0&& set SEED_COMPUTE_CENTROID=0&& set SEED_UPDATE_DEMO_VILLAGE=0&& ..\\.venv\\Scripts\\python.exe scripts/seed_geo_boundaries.py",
+    "seed:geo:chunks": "..\\.venv\\Scripts\\python.exe scripts/seed_geo_chunks.py",
+    "reset:geo": "..\\.venv\\Scripts\\python.exe scripts/reset_geo_tables.py",
+    "seed:maharashtra": "set SEED_FAST_MODE=1&& set SEED_STATE_CODE=27&& ..\\.venv\\Scripts\\python.exe scripts/seed_maharashtra_metadata.py",
+    "upload:geo:supabase": "node scripts/upload_geo_to_supabase.js"
   },
   "dependencies": {
       "bcryptjs": "^2.4.3",

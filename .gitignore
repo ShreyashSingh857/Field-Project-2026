@@ -6,3 +6,7 @@ backend/.env
 apps/*/.env
 apps/*/dist
 backend/dist
+**/__pycache__/
+*.pyc
+backend/data/geo-cache/
+backend/public/geo/
