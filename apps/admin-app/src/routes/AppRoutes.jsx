@@ -48,15 +48,22 @@ function AppRoutes() {
                 {/* Accessible to all roles */}
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/bins" element={<BinMap />} />
+                <Route
+                    path="/bins"
+                    element={
+                        <RoleGate allowedRoles={['ward_member', 'gram_panchayat']}>
+                            <BinMap />
+                        </RoleGate>
+                    }
+                />
                 <Route path="/announcements" element={<Announcements />} />
                 <Route path="/reports" element={<Reports />} />
 
-                {/* panchayat_admin only */}
+                {/* ward_member only */}
                 <Route
                     path="/tasks"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <TaskManagement />
                         </RoleGate>
                     }
@@ -64,7 +71,7 @@ function AppRoutes() {
                 <Route
                     path="/workers"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <WorkerManagement />
                         </RoleGate>
                     }
@@ -72,7 +79,7 @@ function AppRoutes() {
                 <Route
                     path="/issues"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <IssueManagement />
                         </RoleGate>
                     }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { Loader } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
@@ -45,8 +45,32 @@ function MapClickHandler({ enabled, onPick }) {
     return null;
 }
 
+// Auto-fit the map to given bounds whenever they change
+function BoundsFitter({ bounds }) {
+    const map = useMap();
+    useEffect(() => {
+        if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 13 });
+        }
+    }, [bounds, map]);
+    return null;
+}
+
+// Compute a Leaflet LatLngBounds from an array of GeoJSON features
+function computeBounds(features) {
+    const pts = [];
+    for (const f of features) {
+        if (!f?.geometry) continue;
+        const pushRing = (ring) => ring.forEach(([lng, lat]) => pts.push([lat, lng]));
+        const g = f.geometry;
+        if (g.type === 'Polygon') g.coordinates.forEach(pushRing);
+        else if (g.type === 'MultiPolygon') g.coordinates.forEach(poly => poly.forEach(pushRing));
+    }
+    if (!pts.length) return null;
+    return L.latLngBounds(pts);
+}
+
 function BinMap() {
-    const dispatch = useDispatch();
     const role = useSelector(selectRole);
     const adminId = useSelector(selectAdminId);
     const { toast, showToast } = useToast();
@@ -54,7 +78,11 @@ function BinMap() {
     const [binFilter, setBinFilter] = useState('all');
     const [bins, setBins] = useState([]);
     const [villages, setVillages] = useState([]);
+    const [jurisdictionBoundary, setJurisdictionBoundary] = useState(null);
+    const [subBoundaries, setSubBoundaries] = useState(null);
+    const [boundsFit, setBoundsFit] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [boundaryLoading, setBoundaryLoading] = useState(false);
     const [error, setError] = useState(null);
     const [pendingPoint, setPendingPoint] = useState(null);
     const [newBin, setNewBin] = useState({ label: '', village_id: '', location_address: '' });
@@ -62,16 +90,44 @@ function BinMap() {
     useEffect(() => {
         loadBins();
         loadVillages();
+        loadBoundary();
     }, [role, adminId]);
+
+    const loadBoundary = async () => {
+        setBoundaryLoading(true);
+        let boundaryFeature = null;
+        try {
+            const { data: boundaryData } = await api.get('/admin/jurisdiction-boundary');
+            boundaryFeature = boundaryData?.boundary || null;
+            setJurisdictionBoundary(boundaryFeature);
+        } catch (_e) {
+            setJurisdictionBoundary(null);
+        }
+
+        let subFeatureCollection = null;
+        if (role === 'zilla_parishad' || role === 'block_samiti') {
+            try {
+                const { data: subData } = await api.get('/admin/sub-boundaries');
+                subFeatureCollection = subData?.features?.length > 0 ? subData : null;
+                setSubBoundaries(subFeatureCollection);
+            } catch (_e) {
+                setSubBoundaries(null);
+            }
+        } else {
+            setSubBoundaries(null);
+        }
+
+        const allFeatures = [boundaryFeature, ...((subFeatureCollection && subFeatureCollection.features) || [])].filter(Boolean);
+        const bounds = computeBounds(allFeatures);
+        if (bounds) setBoundsFit(bounds);
+        setBoundaryLoading(false);
+    };
 
     const loadBins = async () => {
         try {
             setLoading(true);
             setError(null);
-
-            // For panchayat_admin role, filter by their own admin ID as panchayat_id
-            // For other roles, fetch all bins they can see
-            const filters = role === 'panchayat_admin' ? { assigned_panchayat_id: adminId } : {};
+            const filters = role === 'ward_member' ? { assigned_panchayat_id: adminId } : {};
             const data = await fetchBins(filters);
             const normalized = (data || []).map((bin) => ({
                 ...bin,
@@ -80,7 +136,6 @@ function BinMap() {
             }));
             setBins(normalized);
         } catch (err) {
-            console.error('Error loading bins:', err);
             setError(err.message || 'Failed to fetch bins');
             showToast('Failed to load bins', 'error');
         } finally {
@@ -125,9 +180,19 @@ function BinMap() {
 
     const filteredBins = binFilter === 'all' ? bins : bins.filter((bin) => statusByFill(bin.fillLevel) === binFilter);
 
-    const mapCenter = filteredBins[0]?.location_lat && filteredBins[0]?.location_lng
-        ? [filteredBins[0].location_lat, filteredBins[0].location_lng]
-        : [19.075, 72.877];
+    // Fallback map center if no boundaries computed yet
+    const defaultCenter = (() => {
+        if (filteredBins[0]?.location_lat && filteredBins[0]?.location_lng) {
+            return [filteredBins[0].location_lat, filteredBins[0].location_lng];
+        }
+        return [18.51, 74.05]; // Pune area
+    })();
+
+    const mapZoom = role === 'ward_member' ? 14
+        : role === 'gram_panchayat' ? 13
+        : role === 'block_samiti' ? 11
+        : role === 'zilla_parishad' ? 9
+        : 12;
 
     if (loading) {
         return (
@@ -156,7 +221,6 @@ function BinMap() {
                         Bins Inventory
                     </h2>
 
-                    {/* Filter */}
                     <div style={{ marginBottom: '16px' }}>
                         <div className="admin-form-label">Filter by Status</div>
                         <select
@@ -173,7 +237,6 @@ function BinMap() {
                         </select>
                     </div>
 
-                    {/* Bins List */}
                     <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                         {filteredBins.map((bin) => (
                             <div
@@ -232,18 +295,77 @@ function BinMap() {
                                 </div>
                             </div>
                         ))}
+                        {filteredBins.length === 0 && (
+                            <div style={{ textAlign: 'center', color: 'var(--admin-muted)', padding: '24px 0', fontSize: '13px' }}>
+                                No bins found
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Map Area */}
                 <div className="admin-panel">
-                    <h2 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '16px' }}>
-                        Map View
-                    </h2>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>
+                            Map View
+                        </h2>
+                        {boundaryLoading && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                                Loading boundaries…
+                            </div>
+                        )}
+                        {!boundaryLoading && jurisdictionBoundary && (
+                            <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                Boundary loaded
+                            </div>
+                        )}
+                    </div>
+
+                    {jurisdictionBoundary && (
+                        <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '12px' }}>
+                            {jurisdictionBoundary.properties?.name || 'Jurisdiction'}
+                        </div>
+                    )}
+
                     <div style={{ border: '1px solid var(--admin-border)', borderRadius: '8px', height: '500px', overflow: 'hidden' }}>
-                        <MapContainer center={mapCenter} zoom={14} style={{ height: '100%', width: '100%' }}>
+                        <MapContainer center={defaultCenter} zoom={mapZoom} style={{ height: '100%', width: '100%' }}>
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-                            <MapClickHandler enabled={role === 'panchayat_admin'} onPick={setPendingPoint} />
+
+                            {/* Auto-fit bounds whenever boundaries load */}
+                            {boundsFit && <BoundsFitter bounds={boundsFit} />}
+
+                            {/* Own jurisdiction boundary — thick dashed outline */}
+                            {jurisdictionBoundary && (
+                                <GeoJSON
+                                    key={`own-${jurisdictionBoundary.properties?.lgd_code || 'boundary'}`}
+                                    data={jurisdictionBoundary}
+                                    style={{
+                                        color: '#1565C0',
+                                        weight: 3,
+                                        fillColor: '#1565C0',
+                                        fillOpacity: 0.04,
+                                        dashArray: '8 5',
+                                    }}
+                                />
+                            )}
+
+                            {subBoundaries && subBoundaries.features.map((feat, idx) => (
+                                <GeoJSON
+                                    key={`sub-${feat.properties?.lgd_code || idx}`}
+                                    data={feat}
+                                    style={{
+                                        color: '#E65100',
+                                        weight: 1,
+                                        fillColor: '#E65100',
+                                        fillOpacity: 0.03,
+                                        dashArray: '3 3',
+                                    }}
+                                />
+                            ))}
+
+                            <MapClickHandler enabled={role === 'ward_member'} onPick={setPendingPoint} />
+
                             {filteredBins.map((bin) => (
                                 <Marker key={bin.id} position={[bin.location_lat, bin.location_lng]} icon={markerIcon(bin.fillLevel)}>
                                     <Popup>
@@ -255,7 +377,7 @@ function BinMap() {
                         </MapContainer>
                     </div>
 
-                    {role === 'panchayat_admin' && pendingPoint && (
+                    {role === 'ward_member' && pendingPoint && (
                         <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
                             <input className="admin-form-input" placeholder="Bin label" value={newBin.label} onChange={(e) => setNewBin({ ...newBin, label: e.target.value })} />
                             <input className="admin-form-input" placeholder="Address" value={newBin.location_address} onChange={(e) => setNewBin({ ...newBin, location_address: e.target.value })} />
@@ -268,31 +390,52 @@ function BinMap() {
                     )}
 
                     {/* Legend */}
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--admin-border)' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px' }}>
-                            Legend
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--admin-border)', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                        <div>
+                            <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px' }}>Bin Status</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                {[
+                                    { status: 'empty', label: 'Empty' },
+                                    { status: 'low', label: 'Low' },
+                                    { status: 'medium', label: 'Medium' },
+                                    { status: 'high', label: 'High' },
+                                    { status: 'overflow', label: 'Overflow' },
+                                ].map((item) => (
+                                    <div key={item.status} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+                                        <img
+                                            src={item.status === 'empty' || item.status === 'low' ? '/Empty-DustBin.png' : item.status === 'medium' ? '/Half-filled-Dustbin.png' : '/Filled-Dustbin.png'}
+                                            alt={item.label}
+                                            style={{ width: '14px', height: '14px' }}
+                                        />
+                                        {item.label}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div display="grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {[
-                                { status: 'empty', label: 'Empty' },
-                                { status: 'low', label: 'Low' },
-                                { status: 'medium', label: 'Medium' },
-                                { status: 'high', label: 'High' },
-                                { status: 'overflow', label: 'Overflow' },
-                            ].map((item) => (
-                                <div
-                                    key={item.status}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}
-                                >
-                                    <img
-                                        src={item.status === 'empty' || item.status === 'low' ? '/Empty-DustBin.png' : item.status === 'medium' ? '/Half-filled-Dustbin.png' : '/Filled-Dustbin.png'}
-                                        alt={item.label}
-                                        style={{ width: '14px', height: '14px' }}
-                                    />
-                                    {item.label}
+                        {jurisdictionBoundary && (
+                            <div style={{
+                                marginTop: '12px',
+                                paddingTop: '8px',
+                                borderTop: '1px solid var(--admin-border)',
+                                fontSize: '11px',
+                            }}>
+                                <div style={{ fontWeight: '600', marginBottom: '6px' }}>
+                                    Boundaries (Source: lgdirectory.nic.in)
                                 </div>
-                            ))}
-                        </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                    <div style={{ width: '20px', height: '2px', background: '#1565C0',
+                                        borderTop: '2px dashed #1565C0' }} />
+                                    <span>Your jurisdiction</span>
+                                </div>
+                                {subBoundaries && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <div style={{ width: '20px', height: '2px', background: '#E65100',
+                                            borderTop: '1px dashed #E65100' }} />
+                                        <span>Sub-jurisdictions</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

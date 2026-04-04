@@ -1,7 +1,7 @@
 # GramWasteConnect — Design System Reference
 
 > This document summarizes the UI design language for all three apps.
-> For the User App, the full reference is `apps/GlobalResources/UI_DESIGN_SYSTEM.md`.
+> For the User App, the full reference is `DOCS/GlobalResources/UI_DESIGN_SYSTEM.md`.
 > This document covers the Worker and Admin app styles, plus shared brand rules.
 
 ---
@@ -27,7 +27,7 @@ All three apps belong to the same product family and share a green colour identi
 
 ### User App — Claymorphism
 
-- Full reference: `apps/GlobalResources/UI_DESIGN_SYSTEM.md`
+- Full reference: `DOCS/GlobalResources/UI_DESIGN_SYSTEM.md`
 - Style: Soft, rounded, layered. Elevated clay cards with inner highlights.
 - Audience: General public, village users on phones.
 - Nav: Hamburger + sidebar drawer.

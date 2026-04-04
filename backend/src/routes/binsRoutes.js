@@ -13,8 +13,8 @@ const router = Router();
 // ── Smart Bins ─────────────────────────────────────────────────────────────
 router.get('/', listBins);
 router.get('/:id', getBin);
-router.post('/', verifyAdminJWT, requireRole('panchayat_admin'), createBin);
-router.patch('/:id', verifyAdminJWT, requireRole('panchayat_admin'), updateBin);
-router.delete('/:id', verifyAdminJWT, requireRole('panchayat_admin'), deleteBin);
+router.post('/', verifyAdminJWT, requireRole('ward_member'), createBin);
+router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), updateBin);
+router.delete('/:id', verifyAdminJWT, requireRole('ward_member'), deleteBin);
 
 export default router;
