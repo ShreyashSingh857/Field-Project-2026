@@ -108,7 +108,7 @@ function BinMap() {
         }
 
         let subFeatureCollection = null;
-        if (role === 'zilla_parishad' || role === 'block_samiti') {
+        if (role !== 'ward_member') {
             try {
                 const { data: subData } = await api.get('/admin/sub-boundaries');
                 subFeatureCollection = subData?.features?.length > 0 ? subData : null;
@@ -343,7 +343,7 @@ function BinMap() {
                         </div>
                     )}
 
-                    {(role === 'zilla_parishad' || role === 'block_samiti') && (
+                    {(role === 'zilla_parishad' || role === 'block_samiti' || role === 'gram_panchayat') && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
                             {role === 'zilla_parishad' && (
                                 <>

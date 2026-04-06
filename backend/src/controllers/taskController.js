@@ -22,6 +22,15 @@ function getWorkerContext(req) {
 	return { workerId, villageId };
 }
 
+async function getVillageIdsForAdmin(admin) {
+	let query = supabaseAdmin.from('villages').select('id');
+	if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
+	if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
+	if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
+	const { data } = await query;
+	return (data || []).map((v) => v.id);
+}
+
 async function uploadTaskProof(file, taskId) {
 	if (!file) return null;
 
@@ -40,6 +49,26 @@ async function uploadTaskProof(file, taskId) {
 
 export async function listTasks(req, res) {
 	try {
+		if (req.admin?.type === 'admin') {
+			let query = supabaseAdmin
+				.from('tasks')
+				.select('*, bin:bins(id,label,fill_level,fill_status,location_lat,location_lng,location_address)')
+				.order('created_at', { ascending: false });
+
+			if (req.admin.role === 'ward_member') {
+				query = query.eq('created_by_admin_id', req.admin.id);
+			} else {
+				const villageIds = await getVillageIdsForAdmin(req.admin);
+				if (!villageIds.length) return res.json({ tasks: [] });
+				query = query.in('village_id', villageIds);
+			}
+
+			if (req.query.status) query = query.eq('status', req.query.status);
+			const { data, error } = await query;
+			if (error) throw error;
+			return res.json({ tasks: data || [] });
+		}
+
 		const { workerId, villageId } = getWorkerContext(req);
 		const tasks = await listTasksForWorker({
 			workerId,

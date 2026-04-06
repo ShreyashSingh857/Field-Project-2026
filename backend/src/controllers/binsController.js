@@ -1,5 +1,32 @@
 // backend/src/controllers/binsController.js
 import { supabaseAdmin } from '../config/supabase.js';
+import { verifyToken } from '../services/jwtService.js';
+
+const EMPTY_UUID = '00000000-0000-0000-0000-000000000000';
+
+function getAdminFromAuthHeader(req) {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  try {
+    const decoded = verifyToken(auth.slice(7));
+    return decoded?.type === 'admin' ? decoded : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function getVillageIdsForAdmin(admin) {
+  if (!admin?.role) return [];
+  if (admin.role === 'ward_member') return [];
+
+  let query = supabaseAdmin.from('villages').select('id');
+  if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
+  if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
+  if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
+
+  const { data } = await query;
+  return (data || []).map((v) => v.id);
+}
 
 // ── BINS ───────────────────────────────────────────────────────────────────
 
@@ -7,6 +34,17 @@ import { supabaseAdmin } from '../config/supabase.js';
 export async function listBins(req, res) {
   const { village_id, assigned_panchayat_id, is_active } = req.query;
   let query = supabaseAdmin.from('bins').select('*').order('created_at', { ascending: false });
+
+  const admin = getAdminFromAuthHeader(req);
+  if (admin) {
+    if (admin.role === 'ward_member') {
+      query = query.eq('assigned_panchayat_id', admin.id);
+    } else {
+      const villageIds = await getVillageIdsForAdmin(admin);
+      query = villageIds.length ? query.in('village_id', villageIds) : query.eq('village_id', EMPTY_UUID);
+    }
+  }
+
   if (village_id) query = query.eq('village_id', village_id);
   if (assigned_panchayat_id) query = query.eq('assigned_panchayat_id', assigned_panchayat_id);
   if (is_active === 'true') query = query.eq('is_active', true);
