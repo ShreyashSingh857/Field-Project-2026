@@ -15,6 +15,7 @@ import userRoutes from './routes/userRoutes.js';
 import escalationRoutes from './routes/escalationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import workerRoutes from './routes/workerRoutes.js';
+import sensorRoutes from './routes/sensorRoutes.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -68,6 +69,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/escalations', escalationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/workers', workerRoutes);
+app.use('/api/sensors', sensorRoutes);
 app.get('/api/reports', (_req, res) => {
   res.json({ reports: [] });
 });

@@ -198,7 +198,7 @@ function BinMap() {
         : 12;
 
     const subFeatures = subBoundaries?.features || [];
-    const blockFeatures = subFeatures.filter((f) => f?.properties?.level === 'block');
+    const blockFeatures = subFeatures.filter((f) => ['block', 'subdivision'].includes(f?.properties?.level));
     const panchayatFeatures = subFeatures.filter((f) => f?.properties?.level === 'gp');
     const visiblePanchayats =
         role === 'zilla_parishad' && selectedBlockCode
@@ -349,7 +349,7 @@ function BinMap() {
                                 <>
                                     <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <input type="checkbox" checked={showBlocks} onChange={(e) => setShowBlocks(e.target.checked)} />
-                                        Show blocks
+                                        Show subdivisions
                                     </label>
                                     <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <input type="checkbox" checked={showPanchayats} onChange={(e) => setShowPanchayats(e.target.checked)} />
@@ -364,7 +364,7 @@ function BinMap() {
                                             if (e.target.value) setShowPanchayats(true);
                                         }}
                                     >
-                                        <option value="">All blocks</option>
+                                        <option value="">All subdivisions</option>
                                         {blockFeatures.map((b) => (
                                             <option key={b.properties?.lgd_code} value={b.properties?.lgd_code}>
                                                 {b.properties?.name}
@@ -376,7 +376,7 @@ function BinMap() {
 
                             {role === 'block_samiti' && (
                                 <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
-                                    Panchayat boundaries are shown for your block.
+                                    Child boundaries are shown for your jurisdiction.
                                 </div>
                             )}
                         </div>
@@ -409,11 +409,11 @@ function BinMap() {
                                     key={`sub-${feat.properties?.lgd_code || idx}`}
                                     data={feat}
                                     style={{
-                                        color: feat.properties?.level === 'block' ? '#E65100' : '#2E7D32',
-                                        weight: feat.properties?.level === 'block' ? 1.4 : 0.8,
-                                        fillColor: feat.properties?.level === 'block' ? '#E65100' : '#2E7D32',
-                                        fillOpacity: feat.properties?.level === 'block' ? 0.04 : 0.02,
-                                        dashArray: feat.properties?.level === 'block' ? '3 3' : '2 4',
+                                        color: ['block', 'subdivision'].includes(feat.properties?.level) ? '#E65100' : '#2E7D32',
+                                        weight: ['block', 'subdivision'].includes(feat.properties?.level) ? 1.4 : 0.8,
+                                        fillColor: ['block', 'subdivision'].includes(feat.properties?.level) ? '#E65100' : '#2E7D32',
+                                        fillOpacity: ['block', 'subdivision'].includes(feat.properties?.level) ? 0.04 : 0.02,
+                                        dashArray: ['block', 'subdivision'].includes(feat.properties?.level) ? '3 3' : '2 4',
                                     }}
                                 />
                             ))}

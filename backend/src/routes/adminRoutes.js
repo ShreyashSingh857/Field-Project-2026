@@ -10,6 +10,63 @@ const ROLE_CHILD = {
   gram_panchayat: 'ward_member',
 };
 
+const DISTRICT_HIERARCHY = {
+  default: {
+    type: 'rural_block_gp',
+    districtLabel: 'District',
+    level2Label: 'Block',
+    level3Label: 'Gram Panchayat',
+  },
+  mumbai_city: {
+    type: 'urban_metro',
+    districtLabel: 'District',
+    level2Label: 'Taluka / Subdivision',
+    level3Label: 'Ward / Local Unit',
+  },
+  mumbai_suburban: {
+    type: 'urban_metro',
+    districtLabel: 'District',
+    level2Label: 'Taluka / Subdivision',
+    level3Label: 'Ward / Local Unit',
+  },
+};
+
+function normDistrictName(name) {
+  const raw = String(name || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw.includes('mumbai suburban') || raw.includes('mumbai suburb')) return 'mumbai_suburban';
+  if (raw.includes('mumbai city') || raw === 'mumbai') return 'mumbai_city';
+  return raw;
+}
+
+function getHierarchyProfile(districtName) {
+  const key = normDistrictName(districtName);
+  return DISTRICT_HIERARCHY[key] || DISTRICT_HIERARCHY.default;
+}
+
+async function resolveHierarchyProfileForDistrict(districtName) {
+  const base = getHierarchyProfile(districtName);
+  if (base.type !== 'rural_block_gp') return base;
+
+  const district = await resolveGeoRow('geo_districts', null, districtName || '');
+  if (!district?.id) return base;
+
+  const { count, error } = await supabaseAdmin
+    .from('geo_blocks')
+    .select('id', { count: 'exact', head: true })
+    .eq('district_id', district.id);
+  if (error) return base;
+
+  return (count || 0) > 0
+    ? base
+    : {
+      type: 'urban_no_blocks',
+      districtLabel: 'District',
+      level2Label: 'Taluka / Subdivision',
+      level3Label: 'Ward / Local Unit',
+    };
+}
+
 const router = Router();
 
 const GEO_STORAGE_URL = (process.env.VITE_GEO_STORAGE_URL || `${process.env.SUPABASE_URL}/storage/v1/object/public/geo`).replace(/\/$/, '');
@@ -176,6 +233,12 @@ async function getTopAncestorJurisdictionName(adminId) {
   return lastJurisdiction;
 }
 
+async function resolveDistrictNameForAdmin(admin) {
+  if (!admin?.id) return null;
+  if (admin.role === 'zilla_parishad') return admin.jurisdiction_name || null;
+  return getTopAncestorJurisdictionName(admin.id);
+}
+
 async function ensureVillageForGramPanchayat(creatorAdminId, gramAdmin) {
   const creator = await getAdminRow(creatorAdminId);
   const villageName = String(gramAdmin.jurisdiction_name || gramAdmin.name || '').trim();
@@ -220,6 +283,25 @@ router.get('/sub-admins', verifyAdminJWT, async (req, res) => {
     res.json({ admins: data || [] });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to fetch sub-admins' });
+  }
+});
+
+router.get('/hierarchy-context', verifyAdminJWT, async (req, res) => {
+  try {
+    const me = await getAdminRow(req.admin.id);
+    const districtName = await resolveDistrictNameForAdmin({ ...req.admin, ...me });
+    const profile = await resolveHierarchyProfileForDistrict(districtName);
+    return res.json({
+      districtName: districtName || null,
+      hierarchyType: profile.type,
+      labels: {
+        district: profile.districtLabel,
+        level2: profile.level2Label,
+        level3: profile.level3Label,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch hierarchy context' });
   }
 });
 
@@ -318,6 +400,21 @@ router.get('/jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
   try {
     const role = req.admin.role;
     const jurisdictionName = req.admin.jurisdiction_name || '';
+    const me = await getAdminRow(req.admin.id);
+    if (me?.jurisdiction_geom && role !== 'ward_member') {
+      return res.json({
+        boundary: {
+          type: 'Feature',
+          geometry: me.jurisdiction_geom,
+          properties: {
+            name: jurisdictionName,
+            lgd_code: req.admin.lgd_jurisdiction_code || null,
+            level: role === 'zilla_parishad' ? 'district' : role === 'block_samiti' ? 'subdivision' : 'gp',
+            source: 'admins-db-geometry',
+          },
+        },
+      });
+    }
     const lgdCode = await resolveJurisdictionCode(role, req.admin.lgd_jurisdiction_code, jurisdictionName);
 
     // ward_member has no boundary polygon
@@ -342,7 +439,24 @@ router.get('/jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
         .select('district_census_code')
         .eq('census_code', lgdCode)
         .maybeSingle();
-      if (!block?.district_census_code) return res.json({ boundary: null });
+      if (!block?.district_census_code) {
+        const { fetchNominatimBoundary } = await import('../services/lgdBoundaryService.js');
+        const fallback = await fetchNominatimBoundary(`${jurisdictionName}, Maharashtra, India`);
+        if (!fallback?.geometry) return res.json({ boundary: null });
+        return res.json({
+          boundary: {
+            type: 'Feature',
+            geometry: fallback.geometry,
+            properties: {
+              ...(fallback.properties || {}),
+              name: jurisdictionName,
+              lgd_code: lgdCode,
+              level: 'subdivision',
+              source: 'nominatim-fallback',
+            },
+          },
+        });
+      }
 
       const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${block.district_census_code}/${lgdCode}`, {
         name: jurisdictionName,
@@ -385,16 +499,60 @@ router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
     const name = req.admin.jurisdiction_name || '';
     const features = [];
 
+    if (role === 'zilla_parishad' || role === 'block_samiti') {
+      const childRole = role === 'zilla_parishad' ? 'block_samiti' : 'gram_panchayat';
+      const level = role === 'zilla_parishad' ? 'subdivision' : 'gp';
+      const { data: dbChildren } = await supabaseAdmin
+        .from('admins')
+        .select('jurisdiction_name,lgd_jurisdiction_code,jurisdiction_geom')
+        .eq('parent_admin_id', req.admin.id)
+        .eq('role', childRole)
+        .eq('is_active', true)
+        .order('jurisdiction_name', { ascending: true });
+      const fromDb = (dbChildren || [])
+        .filter((c) => !!c.jurisdiction_geom)
+        .map((c) => ({
+          type: 'Feature',
+          geometry: c.jurisdiction_geom,
+          properties: {
+            name: c.jurisdiction_name,
+            lgd_code: c.lgd_jurisdiction_code || null,
+            level,
+            source: 'admins-db-geometry',
+          },
+        }));
+      if (fromDb.length) return res.json({ type: 'FeatureCollection', features: fromDb, count: fromDb.length });
+    }
+
     if (role === 'zilla_parishad') {
       const district = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, name);
-      if (!district?.id) return res.json({ type: 'FeatureCollection', features: [], count: 0 });
+      const districtName = await resolveDistrictNameForAdmin(req.admin);
+      const profile = await resolveHierarchyProfileForDistrict(districtName);
 
-      const { data: blocks, error: bErr } = await supabaseAdmin
-        .from('geo_blocks')
-        .select('name,census_code,district_census_code')
-        .eq('district_id', district.id)
-        .order('name', { ascending: true });
-      if (bErr) throw bErr;
+      let blocks = [];
+      if (district?.id) {
+        const { data, error: bErr } = await supabaseAdmin
+          .from('geo_blocks')
+          .select('name,census_code,district_census_code')
+          .eq('district_id', district.id)
+          .order('name', { ascending: true });
+        if (bErr) throw bErr;
+        blocks = data || [];
+      }
+
+      if (blocks.length === 0 || profile.type !== 'rural_block_gp') {
+        const { getAdminBoundaries } = await import('../services/lgdBoundaryService.js');
+        const { childBoundaries } = await getAdminBoundaries('zilla_parishad', name || districtName || '');
+        const mapped = (childBoundaries || []).map((f) => ({
+          ...f,
+          properties: {
+            ...(f.properties || {}),
+            level: 'subdivision',
+          },
+        }));
+        features.push(...mapped.filter((f) => f?.geometry));
+        return res.json({ type: 'FeatureCollection', features, count: features.length });
+      }
 
       const { data: admins } = await supabaseAdmin
         .from('admins')
@@ -417,14 +575,30 @@ router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
 
     if (role === 'block_samiti') {
       const block = await resolveGeoRow('geo_blocks', req.admin.lgd_jurisdiction_code, name);
-      if (!block?.id) return res.json({ type: 'FeatureCollection', features: [], count: 0 });
+      let gps = [];
+      if (block?.id) {
+        const { data, error: gErr } = await supabaseAdmin
+          .from('geo_gram_panchayats')
+          .select('name,census_code,district_census_code,block_census_code')
+          .eq('block_id', block.id)
+          .order('name', { ascending: true });
+        if (gErr) throw gErr;
+        gps = data || [];
+      }
 
-      const { data: gps, error: gErr } = await supabaseAdmin
-        .from('geo_gram_panchayats')
-        .select('name,census_code,district_census_code,block_census_code')
-        .eq('block_id', block.id)
-        .order('name', { ascending: true });
-      if (gErr) throw gErr;
+      if (gps.length === 0) {
+        const { getAdminBoundaries } = await import('../services/lgdBoundaryService.js');
+        const { childBoundaries } = await getAdminBoundaries('block_samiti', name || '');
+        const mapped = (childBoundaries || []).map((f) => ({
+          ...f,
+          properties: {
+            ...(f.properties || {}),
+            level: 'gp',
+          },
+        }));
+        features.push(...mapped.filter((f) => f?.geometry));
+        return res.json({ type: 'FeatureCollection', features, count: features.length });
+      }
 
       const { data: admins } = await supabaseAdmin
         .from('admins')
@@ -485,40 +659,66 @@ router.get('/sub-jurisdictions', verifyAdminJWT, async (req, res) => {
 router.get('/child-jurisdiction-options', verifyAdminJWT, async (req, res) => {
   try {
     const role = req.admin.role;
+    const districtName = await resolveDistrictNameForAdmin(req.admin);
+    const profile = await resolveHierarchyProfileForDistrict(districtName);
     const parentDistrict = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
     const parentBlock = await resolveGeoRow('geo_blocks', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
 
     if (!parentDistrict && !parentBlock) {
-      return res.json({ options: [], childRole: ROLE_CHILD[role] || null });
+      return res.json({ options: [], childRole: ROLE_CHILD[role] || null, childLabel: profile.level2Label });
     }
 
     if (role === 'zilla_parishad') {
-      const { data, error } = await supabaseAdmin
-        .from('geo_blocks')
-        .select('name,census_code,id')
-        .eq('district_id', parentDistrict.id)
-        .order('name', { ascending: true });
-      if (error) throw error;
+      let blockOptions = [];
+      if (parentDistrict?.id) {
+        const { data, error } = await supabaseAdmin
+          .from('geo_blocks')
+          .select('name,census_code,id')
+          .eq('district_id', parentDistrict.id)
+          .order('name', { ascending: true });
+        if (error) throw error;
+        blockOptions = (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code }));
+      }
+      if (blockOptions.length > 0 && profile.type === 'rural_block_gp') {
+        return res.json({ childRole: 'block_samiti', childLabel: profile.level2Label, options: blockOptions, source: 'geo_blocks' });
+      }
+
+      const { getSubJurisdictions } = await import('../services/lgdBoundaryService.js');
+      const osmChildren = await getSubJurisdictions('zilla_parishad', req.admin.jurisdiction_name || districtName || '');
       return res.json({
         childRole: 'block_samiti',
-        options: (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code })),
+        childLabel: profile.level2Label,
+        options: (osmChildren || []).map((r) => ({ name: r.name, lgd_code: r.lgd_code || r.osm_id || '' })),
+        source: 'osm',
       });
     }
 
     if (role === 'block_samiti') {
-      const { data, error } = await supabaseAdmin
-        .from('geo_gram_panchayats')
-        .select('name,census_code,id')
-        .eq('block_id', parentBlock.id)
-        .order('name', { ascending: true });
-      if (error) throw error;
+      let gpOptions = [];
+      if (parentBlock?.id) {
+        const { data, error } = await supabaseAdmin
+          .from('geo_gram_panchayats')
+          .select('name,census_code,id')
+          .eq('block_id', parentBlock.id)
+          .order('name', { ascending: true });
+        if (error) throw error;
+        gpOptions = (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code }));
+      }
+      if (gpOptions.length > 0) {
+        return res.json({ childRole: 'gram_panchayat', childLabel: profile.level3Label, options: gpOptions, source: 'geo_gram_panchayats' });
+      }
+
+      const { getSubJurisdictions } = await import('../services/lgdBoundaryService.js');
+      const osmChildren = await getSubJurisdictions('block_samiti', req.admin.jurisdiction_name || '');
       return res.json({
         childRole: 'gram_panchayat',
-        options: (data || []).map((r) => ({ name: r.name, lgd_code: r.census_code })),
+        childLabel: profile.level3Label,
+        options: (osmChildren || []).map((r) => ({ name: r.name, lgd_code: r.lgd_code || r.osm_id || '' })),
+        source: 'osm',
       });
     }
 
-    return res.json({ options: [], childRole: ROLE_CHILD[role] || null });
+    return res.json({ options: [], childRole: ROLE_CHILD[role] || null, childLabel: profile.level3Label });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to fetch child jurisdiction options' });
   }

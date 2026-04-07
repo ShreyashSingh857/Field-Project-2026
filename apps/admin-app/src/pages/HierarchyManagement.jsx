@@ -20,6 +20,7 @@ function HierarchyManagement() {
     const [error, setError] = useState(null);
     const [successCredentials, setSuccessCredentials] = useState(null);
     const [childJurisdictionOptions, setChildJurisdictionOptions] = useState([]);
+    const [childJurisdictionLabel, setChildJurisdictionLabel] = useState('Block');
     const [optionsLoading, setOptionsLoading] = useState(false);
     const [optionsError, setOptionsError] = useState(null);
 
@@ -45,6 +46,7 @@ function HierarchyManagement() {
             setOptionsLoading(true);
             setOptionsError(null);
             const { data } = await api.get('/admin/child-jurisdiction-options');
+            setChildJurisdictionLabel(data?.childLabel || (role === 'block_samiti' ? 'Gram Panchayat' : 'Block'));
             const primary = (data?.options || []).map((item) => ({
                 name: item.name || item.label || item.jurisdiction_name || 'Unnamed',
                 lgd_code: String(item.lgd_code || item.census_code || ''),
@@ -68,6 +70,7 @@ function HierarchyManagement() {
             setOptionsError(fallback.length ? null : 'No child jurisdictions found for this admin');
         } catch (_err) {
             setChildJurisdictionOptions([]);
+            setChildJurisdictionLabel(role === 'block_samiti' ? 'Gram Panchayat' : 'Block');
             setOptionsError('Failed to load jurisdiction list');
         } finally {
             setOptionsLoading(false);
@@ -405,7 +408,7 @@ function HierarchyManagement() {
                                     </div>
 
                                     <div className="admin-form-group">
-                                        <label className="admin-form-label required">Jurisdiction Name</label>
+                                        <label className="admin-form-label required">{childJurisdictionLabel} Name</label>
                                         <select
                                             className="admin-form-select"
                                             value={formData.lgd_jurisdiction_code}
@@ -420,7 +423,7 @@ function HierarchyManagement() {
                                             required
                                             disabled={optionsLoading}
                                         >
-                                            <option value="">{optionsLoading ? 'Loading blocks...' : 'Select a block from your list'}</option>
+                                            <option value="">{optionsLoading ? `Loading ${childJurisdictionLabel.toLowerCase()}s...` : `Select a ${childJurisdictionLabel.toLowerCase()} from your list`}</option>
                                             {childJurisdictionOptions.map((opt) => (
                                                 <option key={opt.lgd_code || opt.name} value={opt.lgd_code || opt.name}>
                                                     {opt.name}
@@ -439,7 +442,7 @@ function HierarchyManagement() {
                                         <input
                                             type="text"
                                             className="admin-form-input"
-                                            placeholder="e.g. 5504 for Haveli Block — from lgdirectory.nic.in"
+                                            placeholder={`LGD / census code for selected ${childJurisdictionLabel.toLowerCase()}`}
                                             value={formData.lgd_jurisdiction_code}
                                             onChange={(e) => setFormData({ ...formData, lgd_jurisdiction_code: e.target.value })}
                                             readOnly={childJurisdictionOptions.length > 0}
