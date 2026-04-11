@@ -79,6 +79,7 @@ function BinMap() {
     const [bins, setBins] = useState([]);
     const [villages, setVillages] = useState([]);
     const [jurisdictionBoundary, setJurisdictionBoundary] = useState(null);
+    const [parentBoundary, setParentBoundary] = useState(null);
     const [subBoundaries, setSubBoundaries] = useState(null);
     const [showBlocks, setShowBlocks] = useState(true);
     const [showPanchayats, setShowPanchayats] = useState(false);
@@ -86,6 +87,7 @@ function BinMap() {
     const [boundsFit, setBoundsFit] = useState(null);
     const [loading, setLoading] = useState(true);
     const [boundaryLoading, setBoundaryLoading] = useState(false);
+    const [addressLoading, setAddressLoading] = useState(false);
     const [error, setError] = useState(null);
     const [pendingPoint, setPendingPoint] = useState(null);
     const [newBin, setNewBin] = useState({ label: '', village_id: '', location_address: '' });
@@ -99,12 +101,21 @@ function BinMap() {
     const loadBoundary = async () => {
         setBoundaryLoading(true);
         let boundaryFeature = null;
+        let parentFeature = null;
         try {
             const { data: boundaryData } = await api.get('/admin/jurisdiction-boundary');
             boundaryFeature = boundaryData?.boundary || null;
             setJurisdictionBoundary(boundaryFeature);
         } catch (_e) {
             setJurisdictionBoundary(null);
+        }
+
+        try {
+            const { data: parentData } = await api.get('/admin/parent-jurisdiction-boundary');
+            parentFeature = parentData?.boundary || null;
+            setParentBoundary(parentFeature);
+        } catch (_e) {
+            setParentBoundary(null);
         }
 
         let subFeatureCollection = null;
@@ -120,8 +131,10 @@ function BinMap() {
             setSubBoundaries(null);
         }
 
-        const allFeatures = [boundaryFeature, ...((subFeatureCollection && subFeatureCollection.features) || [])].filter(Boolean);
-        const bounds = computeBounds(allFeatures);
+        const focusFeatures = parentFeature
+            ? [parentFeature]
+            : [boundaryFeature, ...((subFeatureCollection && subFeatureCollection.features) || [])].filter(Boolean);
+        const bounds = computeBounds(focusFeatures);
         if (bounds) setBoundsFit(bounds);
         setBoundaryLoading(false);
     };
@@ -130,7 +143,7 @@ function BinMap() {
         try {
             setLoading(true);
             setError(null);
-            const filters = role === 'ward_member' ? { assigned_panchayat_id: adminId } : {};
+            const filters = {};
             const data = await fetchBins(filters);
             const normalized = (data || []).map((bin) => ({
                 ...bin,
@@ -176,6 +189,25 @@ function BinMap() {
             showToast('Dustbin created successfully', 'success');
         } catch (err) {
             showToast('Failed to create dustbin: ' + err.message, 'error');
+        }
+    };
+
+    const handlePickPoint = async (point) => {
+        setPendingPoint(point);
+        setAddressLoading(true);
+        try {
+            const { data } = await api.get('/bins/reverse-geocode', {
+                params: { lat: point.lat, lng: point.lng },
+            });
+            const detected = data?.address || '';
+            setNewBin((prev) => ({
+                ...prev,
+                location_address: detected || prev.location_address || '',
+            }));
+        } catch (_e) {
+            // Keep manual entry fallback if reverse geocoding fails.
+        } finally {
+            setAddressLoading(false);
         }
     };
 
@@ -342,6 +374,11 @@ function BinMap() {
                             {jurisdictionBoundary.properties?.name || 'Jurisdiction'}
                         </div>
                     )}
+                    {parentBoundary && (
+                        <div style={{ fontSize: '12px', color: 'var(--admin-muted)', marginBottom: '12px' }}>
+                            Focus: Parent boundary ({parentBoundary.properties?.name || 'Parent'})
+                        </div>
+                    )}
 
                     {(role === 'zilla_parishad' || role === 'block_samiti' || role === 'gram_panchayat') && (
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -389,6 +426,21 @@ function BinMap() {
                             {/* Auto-fit bounds whenever boundaries load */}
                             {boundsFit && <BoundsFitter bounds={boundsFit} />}
 
+                            {/* Parent boundary used for focus */}
+                            {parentBoundary && (
+                                <GeoJSON
+                                    key={`parent-${parentBoundary.properties?.lgd_code || 'boundary'}`}
+                                    data={parentBoundary}
+                                    style={{
+                                        color: '#6B7280',
+                                        weight: 2.5,
+                                        fillColor: '#6B7280',
+                                        fillOpacity: 0.02,
+                                        dashArray: '6 6',
+                                    }}
+                                />
+                            )}
+
                             {/* Own jurisdiction boundary — thick dashed outline */}
                             {jurisdictionBoundary && (
                                 <GeoJSON
@@ -409,16 +461,20 @@ function BinMap() {
                                     key={`sub-${feat.properties?.lgd_code || idx}`}
                                     data={feat}
                                     style={{
-                                        color: ['block', 'subdivision'].includes(feat.properties?.level) ? '#E65100' : '#2E7D32',
-                                        weight: ['block', 'subdivision'].includes(feat.properties?.level) ? 1.4 : 0.8,
-                                        fillColor: ['block', 'subdivision'].includes(feat.properties?.level) ? '#E65100' : '#2E7D32',
-                                        fillOpacity: ['block', 'subdivision'].includes(feat.properties?.level) ? 0.04 : 0.02,
-                                        dashArray: ['block', 'subdivision'].includes(feat.properties?.level) ? '3 3' : '2 4',
+                                        color: ['block', 'subdivision'].includes(feat.properties?.level)
+                                            ? '#E65100'
+                                            : feat.properties?.level === 'ward'
+                                                ? '#7C3AED'
+                                                : '#2E7D32',
+                                        weight: ['block', 'subdivision'].includes(feat.properties?.level) ? 1.4 : 1.1,
+                                        fillColor: feat.properties?.level === 'ward' ? '#7C3AED' : ['block', 'subdivision'].includes(feat.properties?.level) ? '#E65100' : '#2E7D32',
+                                        fillOpacity: feat.properties?.level === 'ward' ? 0.08 : ['block', 'subdivision'].includes(feat.properties?.level) ? 0.04 : 0.02,
+                                        dashArray: feat.properties?.level === 'ward' ? '5 4' : ['block', 'subdivision'].includes(feat.properties?.level) ? '3 3' : '2 4',
                                     }}
                                 />
                             ))}
 
-                            <MapClickHandler enabled={role === 'ward_member'} onPick={setPendingPoint} />
+                            <MapClickHandler enabled={role === 'ward_member'} onPick={handlePickPoint} />
 
                             {filteredBins.map((bin) => (
                                 <Marker key={bin.id} position={[bin.location_lat, bin.location_lng]} icon={markerIcon(bin.fillLevel)}>
@@ -427,6 +483,9 @@ function BinMap() {
                                     </Popup>
                                 </Marker>
                             ))}
+                            {wardDrawPoints.length >= 3 && (
+                                <Polygon positions={closeRing(wardDrawPoints)} pathOptions={{ color: '#B45309', weight: 2, dashArray: '6 4' }} />
+                            )}
                             {pendingPoint && <Marker position={[pendingPoint.lat, pendingPoint.lng]} icon={makeImgIcon('/Half-filled-Dustbin.png')} />}
                         </MapContainer>
                     </div>
@@ -434,6 +493,11 @@ function BinMap() {
                     {role === 'ward_member' && pendingPoint && (
                         <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
                             <input className="admin-form-input" placeholder="Bin label" value={newBin.label} onChange={(e) => setNewBin({ ...newBin, label: e.target.value })} />
+                            {addressLoading && (
+                                <div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                    Detecting address...
+                                </div>
+                            )}
                             <input className="admin-form-input" placeholder="Address" value={newBin.location_address} onChange={(e) => setNewBin({ ...newBin, location_address: e.target.value })} />
                             <select className="admin-form-select" value={newBin.village_id} onChange={(e) => setNewBin({ ...newBin, village_id: e.target.value })}>
                                 <option value="">Select village (optional)</option>

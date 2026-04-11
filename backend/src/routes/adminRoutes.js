@@ -31,12 +31,37 @@ const DISTRICT_HIERARCHY = {
   },
 };
 
+const DISTRICT_PRESET_CHILD_OPTIONS = {
+  mumbai_city: {
+    childRole: 'block_samiti',
+    childLabel: 'Taluka / Subdivision',
+    options: 'A Ward|B Ward|C Ward|D Ward|E Ward|F North Ward|F South Ward|G North Ward|G South Ward|H East Ward|H West Ward|K East Ward|K West Ward|L Ward|M East Ward|M West Ward|N Ward|P North Ward|P South Ward|R North Ward|R Central Ward|R South Ward|S Ward|T Ward'
+      .split('|')
+      .map((name, idx) => ({ name, lgd_code: `MC-${idx + 1}` })),
+    source: 'preset-mumbai-city',
+  },
+  mumbai_suburban: {
+    childRole: 'block_samiti',
+    childLabel: 'Taluka / Subdivision',
+    options: [
+      { name: 'Andheri', lgd_code: 'M-1' },
+      { name: 'Borivali', lgd_code: 'M-2' },
+      { name: 'Kurla', lgd_code: 'M-3' },
+    ],
+    source: 'preset-mumbai-suburban',
+  },
+};
+
 function normDistrictName(name) {
   const raw = String(name || '').trim().toLowerCase();
   if (!raw) return '';
   if (raw.includes('mumbai suburban') || raw.includes('mumbai suburb')) return 'mumbai_suburban';
   if (raw.includes('mumbai city') || raw === 'mumbai') return 'mumbai_city';
   return raw;
+}
+
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase().replace(/\s+/g, '_');
 }
 
 function getHierarchyProfile(districtName) {
@@ -208,10 +233,131 @@ async function getChildAdminBoundaryFeature(child) {
   return null;
 }
 
+async function resolveAdminJurisdictionGeometry(role, lgdCode, jurisdictionName) {
+  if (role === 'ward_member') return null;
+
+  const name = String(jurisdictionName || '').trim();
+  if (!name && !lgdCode) return null;
+
+  if (role === 'zilla_parishad') {
+    const lgd = await resolveJurisdictionCode(role, lgdCode, name);
+    if (!lgd) return null;
+    const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${lgd}`, { name, lgd_code: lgd, level: 'district' });
+    return feature?.geometry || null;
+  }
+
+  if (role === 'block_samiti') {
+    const row = await resolveGeoRow('geo_blocks', lgdCode, name);
+    if (!row?.census_code) return null;
+    const { data: block } = await supabaseAdmin
+      .from('geo_blocks')
+      .select('district_census_code')
+      .eq('census_code', row.census_code)
+      .maybeSingle();
+    if (!block?.district_census_code) return null;
+    const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${block.district_census_code}/${row.census_code}`, { name, lgd_code: row.census_code, level: 'block' });
+    return feature?.geometry || null;
+  }
+
+  if (role === 'gram_panchayat') {
+    const row = await resolveGeoRow('geo_gram_panchayats', lgdCode, name);
+    if (!row?.census_code) return null;
+    const { data: gp } = await supabaseAdmin
+      .from('geo_gram_panchayats')
+      .select('district_census_code,block_census_code')
+      .eq('census_code', row.census_code)
+      .maybeSingle();
+    if (!gp?.district_census_code || !gp?.block_census_code) return null;
+    const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${gp.district_census_code}/${gp.block_census_code}/${row.census_code}`, { name, lgd_code: row.census_code, level: 'gp' });
+    return feature?.geometry || null;
+  }
+
+  return null;
+}
+
+async function buildBoundaryFeatureForAdmin(admin) {
+  if (!admin?.role) return null;
+  const role = admin.role;
+  const jurisdictionName = String(admin.jurisdiction_name || '').trim();
+
+  if (admin.jurisdiction_geom) {
+    return {
+      type: 'Feature',
+      geometry: admin.jurisdiction_geom,
+      properties: {
+        name: jurisdictionName,
+        lgd_code: admin.lgd_jurisdiction_code || null,
+        level: role === 'zilla_parishad' ? 'district' : role === 'block_samiti' ? 'subdivision' : role === 'gram_panchayat' ? 'gp' : 'ward',
+        source: 'admins-db-geometry',
+      },
+    };
+  }
+
+  if (role === 'ward_member') return null;
+
+  const lgdCode = await resolveJurisdictionCode(role, admin.lgd_jurisdiction_code, jurisdictionName);
+  if (!lgdCode) return null;
+
+  if (role === 'zilla_parishad') {
+    return fetchGeoFeatureByPath(`${MH_STATE_CODE}/${lgdCode}`, {
+      name: jurisdictionName,
+      lgd_code: lgdCode,
+      level: 'district',
+    });
+  }
+
+  if (role === 'block_samiti') {
+    const { data: block } = await supabaseAdmin
+      .from('geo_blocks')
+      .select('district_census_code')
+      .eq('census_code', lgdCode)
+      .maybeSingle();
+
+    if (!block?.district_census_code) {
+      const { fetchNominatimBoundary } = await import('../services/lgdBoundaryService.js');
+      const fallback = await fetchNominatimBoundary(`${jurisdictionName}, Maharashtra, India`);
+      if (!fallback?.geometry) return null;
+      return {
+        type: 'Feature',
+        geometry: fallback.geometry,
+        properties: {
+          ...(fallback.properties || {}),
+          name: jurisdictionName,
+          lgd_code: lgdCode,
+          level: 'subdivision',
+          source: 'nominatim-fallback',
+        },
+      };
+    }
+
+    return fetchGeoFeatureByPath(`${MH_STATE_CODE}/${block.district_census_code}/${lgdCode}`, {
+      name: jurisdictionName,
+      lgd_code: lgdCode,
+      level: 'block',
+    });
+  }
+
+  if (role === 'gram_panchayat') {
+    const { data: gp } = await supabaseAdmin
+      .from('geo_gram_panchayats')
+      .select('district_census_code, block_census_code')
+      .eq('census_code', lgdCode)
+      .maybeSingle();
+    if (!gp?.district_census_code || !gp?.block_census_code) return null;
+
+    return fetchGeoFeatureByPath(
+      `${MH_STATE_CODE}/${gp.district_census_code}/${gp.block_census_code}/${lgdCode}`,
+      { name: jurisdictionName, lgd_code: lgdCode, level: 'gp' }
+    );
+  }
+
+  return null;
+}
+
 async function getAdminRow(adminId) {
   const { data, error } = await supabaseAdmin
     .from('admins')
-    .select('id,role,jurisdiction_name,parent_admin_id')
+    .select('id,role,jurisdiction_name,parent_admin_id,lgd_jurisdiction_code,jurisdiction_geom')
     .eq('id', adminId)
     .maybeSingle();
   if (error) throw error;
@@ -267,6 +413,48 @@ async function ensureVillageForGramPanchayat(creatorAdminId, gramAdmin) {
     .single();
   if (createErr) throw createErr;
   return created;
+}
+
+function pointInRing(point, ring) {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const crosses = (yi > y) !== (yj > y)
+      && x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(point, geometry) {
+  if (!geometry?.type || !geometry?.coordinates) return false;
+  if (geometry.type === 'Polygon') {
+    const [outer, ...holes] = geometry.coordinates;
+    if (!outer || !pointInRing(point, outer)) return false;
+    return !holes.some((hole) => pointInRing(point, hole));
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.some((poly) => {
+      const [outer, ...holes] = poly;
+      if (!outer || !pointInRing(point, outer)) return false;
+      return !holes.some((hole) => pointInRing(point, hole));
+    });
+  }
+  return false;
+}
+
+function geometryVertices(geometry) {
+  const pts = [];
+  if (!geometry?.type || !geometry?.coordinates) return pts;
+  if (geometry.type === 'Polygon') {
+    geometry.coordinates.forEach((ring) => ring.forEach((p) => pts.push(p)));
+  }
+  if (geometry.type === 'MultiPolygon') {
+    geometry.coordinates.forEach((poly) => poly.forEach((ring) => ring.forEach((p) => pts.push(p))));
+  }
+  return pts;
 }
 
 router.post('/login', adminLogin);
@@ -352,10 +540,18 @@ router.post('/sub-admins', verifyAdminJWT, async (req, res) => {
         created_by: req.admin.id,
         is_active: true,
       })
-      .select('id,name,email,role,jurisdiction_name,is_active,created_at,parent_admin_id')
+      .select('id,name,email,role,jurisdiction_name,lgd_jurisdiction_code,is_active,created_at,parent_admin_id,jurisdiction_geom')
       .single();
 
     if (error) throw error;
+    const geometry = await resolveAdminJurisdictionGeometry(data.role, data.lgd_jurisdiction_code, data.jurisdiction_name);
+    if (geometry) {
+      const { error: geomErr } = await supabaseAdmin
+        .from('admins')
+        .update({ jurisdiction_geom: geometry, updated_at: new Date().toISOString() })
+        .eq('id', data.id);
+      if (!geomErr) data.jurisdiction_geom = geometry;
+    }
     let village = null;
     if (childRole === 'gram_panchayat') {
       try {
@@ -398,93 +594,41 @@ router.delete('/sub-admins/:id', verifyAdminJWT, async (req, res) => {
 //   ward_member    -> null (no boundary shown, only bins)
 router.get('/jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
   try {
-    const role = req.admin.role;
-    const jurisdictionName = req.admin.jurisdiction_name || '';
     const me = await getAdminRow(req.admin.id);
-    if (me?.jurisdiction_geom && role !== 'ward_member') {
-      return res.json({
-        boundary: {
-          type: 'Feature',
-          geometry: me.jurisdiction_geom,
-          properties: {
-            name: jurisdictionName,
-            lgd_code: req.admin.lgd_jurisdiction_code || null,
-            level: role === 'zilla_parishad' ? 'district' : role === 'block_samiti' ? 'subdivision' : 'gp',
-            source: 'admins-db-geometry',
-          },
-        },
-      });
-    }
-    const lgdCode = await resolveJurisdictionCode(role, req.admin.lgd_jurisdiction_code, jurisdictionName);
-
-    // ward_member has no boundary polygon
-    if (role === 'ward_member') {
-      return res.json({ boundary: null });
-    }
-
-    if (!lgdCode) return res.json({ boundary: null, message: 'Jurisdiction code not found' });
-
-    if (role === 'zilla_parishad') {
-      const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${lgdCode}`, {
-        name: jurisdictionName,
-        lgd_code: lgdCode,
-        level: 'district',
-      });
-      return res.json({ boundary: feature });
-    }
-
-    if (role === 'block_samiti') {
-      const { data: block } = await supabaseAdmin
-        .from('geo_blocks')
-        .select('district_census_code')
-        .eq('census_code', lgdCode)
-        .maybeSingle();
-      if (!block?.district_census_code) {
-        const { fetchNominatimBoundary } = await import('../services/lgdBoundaryService.js');
-        const fallback = await fetchNominatimBoundary(`${jurisdictionName}, Maharashtra, India`);
-        if (!fallback?.geometry) return res.json({ boundary: null });
-        return res.json({
-          boundary: {
-            type: 'Feature',
-            geometry: fallback.geometry,
-            properties: {
-              ...(fallback.properties || {}),
-              name: jurisdictionName,
-              lgd_code: lgdCode,
-              level: 'subdivision',
-              source: 'nominatim-fallback',
-            },
-          },
-        });
-      }
-
-      const feature = await fetchGeoFeatureByPath(`${MH_STATE_CODE}/${block.district_census_code}/${lgdCode}`, {
-        name: jurisdictionName,
-        lgd_code: lgdCode,
-        level: 'block',
-      });
-      return res.json({ boundary: feature });
-    }
-
-    if (role === 'gram_panchayat') {
-      const { data: gp } = await supabaseAdmin
-        .from('geo_gram_panchayats')
-        .select('district_census_code, block_census_code')
-        .eq('census_code', lgdCode)
-        .maybeSingle();
-      if (!gp?.district_census_code || !gp?.block_census_code) return res.json({ boundary: null });
-
-      const feature = await fetchGeoFeatureByPath(
-        `${MH_STATE_CODE}/${gp.district_census_code}/${gp.block_census_code}/${lgdCode}`,
-        { name: jurisdictionName, lgd_code: lgdCode, level: 'gp' }
-      );
-      return res.json({ boundary: feature });
-    }
-
-    return res.json({ boundary: null });
+    const boundary = await buildBoundaryFeatureForAdmin({ ...req.admin, ...me });
+    return res.json({ boundary: boundary || null });
   } catch (err) {
     console.error('[jurisdiction-boundary]', err.message);
     return res.status(500).json({ error: err.message || 'Failed to fetch boundary' });
+  }
+});
+
+// GET /api/admin/parent-jurisdiction-boundary
+// Returns parent admin boundary to drive focus/fit for child admins.
+router.get('/parent-jurisdiction-boundary', verifyAdminJWT, async (req, res) => {
+  try {
+    const me = await getAdminRow(req.admin.id);
+    if (!me?.parent_admin_id) {
+      return res.json({ boundary: null, parent: null });
+    }
+
+    const parent = await getAdminRow(me.parent_admin_id);
+    if (!parent) {
+      return res.json({ boundary: null, parent: null });
+    }
+
+    const boundary = await buildBoundaryFeatureForAdmin(parent);
+    return res.json({
+      boundary: boundary || null,
+      parent: {
+        id: parent.id,
+        role: parent.role,
+        jurisdiction_name: parent.jurisdiction_name,
+      },
+    });
+  } catch (err) {
+    console.error('[parent-jurisdiction-boundary]', err.message);
+    return res.status(500).json({ error: err.message || 'Failed to fetch parent boundary' });
   }
 });
 
@@ -499,30 +643,8 @@ router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
     const name = req.admin.jurisdiction_name || '';
     const features = [];
 
-    if (role === 'zilla_parishad' || role === 'block_samiti') {
-      const childRole = role === 'zilla_parishad' ? 'block_samiti' : 'gram_panchayat';
-      const level = role === 'zilla_parishad' ? 'subdivision' : 'gp';
-      const { data: dbChildren } = await supabaseAdmin
-        .from('admins')
-        .select('jurisdiction_name,lgd_jurisdiction_code,jurisdiction_geom')
-        .eq('parent_admin_id', req.admin.id)
-        .eq('role', childRole)
-        .eq('is_active', true)
-        .order('jurisdiction_name', { ascending: true });
-      const fromDb = (dbChildren || [])
-        .filter((c) => !!c.jurisdiction_geom)
-        .map((c) => ({
-          type: 'Feature',
-          geometry: c.jurisdiction_geom,
-          properties: {
-            name: c.jurisdiction_name,
-            lgd_code: c.lgd_jurisdiction_code || null,
-            level,
-            source: 'admins-db-geometry',
-          },
-        }));
-      if (fromDb.length) return res.json({ type: 'FeatureCollection', features: fromDb, count: fromDb.length });
-    }
+    // For map rendering, always prefer computed jurisdiction boundaries from geo/OSM.
+    // Stored admin geometries can be tiny/manual and may not represent full subdivisions.
 
     if (role === 'zilla_parishad') {
       const district = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, name);
@@ -551,26 +673,25 @@ router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
           },
         }));
         features.push(...mapped.filter((f) => f?.geometry));
-        return res.json({ type: 'FeatureCollection', features, count: features.length });
+      } else {
+        const { data: admins } = await supabaseAdmin
+          .from('admins')
+          .select('lgd_jurisdiction_code')
+          .eq('parent_admin_id', req.admin.id)
+          .eq('role', 'block_samiti')
+          .eq('is_active', true);
+        const adminCodes = new Set((admins || []).map((a) => String(a.lgd_jurisdiction_code || '')));
+
+        const list = await Promise.all((blocks || []).map((b) =>
+          fetchGeoFeatureByPath(`${MH_STATE_CODE}/${b.district_census_code}/${b.census_code}`, {
+            name: b.name,
+            lgd_code: b.census_code,
+            level: 'block',
+            has_admin: adminCodes.has(String(b.census_code)),
+          })
+        ));
+        features.push(...list.filter(Boolean));
       }
-
-      const { data: admins } = await supabaseAdmin
-        .from('admins')
-        .select('lgd_jurisdiction_code')
-        .eq('parent_admin_id', req.admin.id)
-        .eq('role', 'block_samiti')
-        .eq('is_active', true);
-      const adminCodes = new Set((admins || []).map((a) => String(a.lgd_jurisdiction_code || '')));
-
-      const list = await Promise.all((blocks || []).map((b) =>
-        fetchGeoFeatureByPath(`${MH_STATE_CODE}/${b.district_census_code}/${b.census_code}`, {
-          name: b.name,
-          lgd_code: b.census_code,
-          level: 'block',
-          has_admin: adminCodes.has(String(b.census_code)),
-        })
-      ));
-      features.push(...list.filter(Boolean));
     }
 
     if (role === 'block_samiti') {
@@ -597,27 +718,83 @@ router.get('/sub-boundaries', verifyAdminJWT, async (req, res) => {
           },
         }));
         features.push(...mapped.filter((f) => f?.geometry));
-        return res.json({ type: 'FeatureCollection', features, count: features.length });
+      } else {
+        const { data: admins } = await supabaseAdmin
+          .from('admins')
+          .select('lgd_jurisdiction_code')
+          .eq('parent_admin_id', req.admin.id)
+          .eq('role', 'gram_panchayat')
+          .eq('is_active', true);
+        const adminCodes = new Set((admins || []).map((a) => String(a.lgd_jurisdiction_code || '')));
+
+        const list = await Promise.all((gps || []).map((g) =>
+          fetchGeoFeatureByPath(`${MH_STATE_CODE}/${g.district_census_code}/${g.block_census_code}/${g.census_code}`, {
+            name: g.name,
+            lgd_code: g.census_code,
+            level: 'gp',
+            has_admin: adminCodes.has(String(g.census_code)),
+            block_code: g.block_census_code,
+          })
+        ));
+        features.push(...list.filter(Boolean));
       }
+    }
 
-      const { data: admins } = await supabaseAdmin
+    if (role === 'gram_panchayat') {
+      const { data: wards, error: wErr } = await supabaseAdmin
         .from('admins')
-        .select('lgd_jurisdiction_code')
+        .select('id,name,jurisdiction_name,lgd_jurisdiction_code,jurisdiction_geom')
         .eq('parent_admin_id', req.admin.id)
-        .eq('role', 'gram_panchayat')
-        .eq('is_active', true);
-      const adminCodes = new Set((admins || []).map((a) => String(a.lgd_jurisdiction_code || '')));
+        .eq('role', 'ward_member')
+        .eq('is_active', true)
+        .not('jurisdiction_geom', 'is', null)
+        .order('name', { ascending: true });
+      if (wErr) throw wErr;
 
-      const list = await Promise.all((gps || []).map((g) =>
-        fetchGeoFeatureByPath(`${MH_STATE_CODE}/${g.district_census_code}/${g.block_census_code}/${g.census_code}`, {
-          name: g.name,
-          lgd_code: g.census_code,
-          level: 'gp',
-          has_admin: adminCodes.has(String(g.census_code)),
-          block_code: g.block_census_code,
-        })
-      ));
-      features.push(...list.filter(Boolean));
+      const wardFeatures = (wards || []).map((w) => ({
+        type: 'Feature',
+        geometry: w.jurisdiction_geom,
+        properties: {
+          name: w.name || w.jurisdiction_name,
+          ward_name: w.jurisdiction_name || w.name,
+          lgd_code: w.lgd_jurisdiction_code || null,
+          level: 'ward',
+          admin_id: w.id,
+          source: 'admins-db-geometry',
+        },
+      }));
+      features.push(...wardFeatures.filter((f) => !!f.geometry));
+    }
+
+    // Fallback: if computed source has no children, return stored child admin geometries.
+    if (features.length === 0 && (role === 'zilla_parishad' || role === 'block_samiti')) {
+      const childRole = role === 'zilla_parishad' ? 'block_samiti' : 'gram_panchayat';
+      const level = role === 'zilla_parishad' ? 'subdivision' : 'gp';
+
+      const { data: dbChildren, error: dbErr } = await supabaseAdmin
+        .from('admins')
+        .select('id,jurisdiction_name,lgd_jurisdiction_code,jurisdiction_geom')
+        .eq('parent_admin_id', req.admin.id)
+        .eq('role', childRole)
+        .eq('is_active', true)
+        .not('jurisdiction_geom', 'is', null)
+        .order('jurisdiction_name', { ascending: true });
+
+      if (dbErr) throw dbErr;
+
+      const fromDb = (dbChildren || []).map((c) => ({
+        type: 'Feature',
+        geometry: c.jurisdiction_geom,
+        properties: {
+          name: c.jurisdiction_name,
+          lgd_code: c.lgd_jurisdiction_code || null,
+          level,
+          source: 'admins-db-geometry-fallback',
+          admin_id: c.id,
+        },
+      }));
+
+      features.push(...fromDb.filter((f) => !!f.geometry));
     }
 
     return res.json({
@@ -661,6 +838,12 @@ router.get('/child-jurisdiction-options', verifyAdminJWT, async (req, res) => {
     const role = req.admin.role;
     const districtName = await resolveDistrictNameForAdmin(req.admin);
     const profile = await resolveHierarchyProfileForDistrict(districtName);
+    const districtKey = normDistrictName(districtName || req.admin.jurisdiction_name || '');
+
+    if (role === 'zilla_parishad' && DISTRICT_PRESET_CHILD_OPTIONS[districtKey]) {
+      return res.json(DISTRICT_PRESET_CHILD_OPTIONS[districtKey]);
+    }
+
     const parentDistrict = await resolveGeoRow('geo_districts', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
     const parentBlock = await resolveGeoRow('geo_blocks', req.admin.lgd_jurisdiction_code, req.admin.jurisdiction_name || '');
 
@@ -721,6 +904,91 @@ router.get('/child-jurisdiction-options', verifyAdminJWT, async (req, res) => {
     return res.json({ options: [], childRole: ROLE_CHILD[role] || null, childLabel: profile.level3Label });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to fetch child jurisdiction options' });
+  }
+});
+
+// GET /api/admin/ward-subadmins
+// Gram panchayat: list active ward members under current admin.
+router.get('/ward-subadmins', verifyAdminJWT, async (req, res) => {
+  try {
+    const me = await getAdminRow(req.admin.id);
+    const role = normalizeRole(me?.role || req.admin.role);
+    if (role !== 'gram_panchayat') {
+      return res.status(403).json({ error: 'Only gram panchayat can access ward members' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('admins')
+      .select('id,name,email,jurisdiction_name,jurisdiction_geom,is_active')
+      .eq('parent_admin_id', req.admin.id)
+      .eq('role', 'ward_member')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    if (error) throw error;
+
+    return res.json({ wardMembers: data || [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch ward members' });
+  }
+});
+
+// PUT /api/admin/ward-subadmins/:wardId/jurisdiction
+// Gram panchayat can assign ward polygon; polygon must lie within GP boundary.
+router.put('/ward-subadmins/:wardId/jurisdiction', verifyAdminJWT, async (req, res) => {
+  try {
+    const me = await getAdminRow(req.admin.id);
+    const role = normalizeRole(me?.role || req.admin.role);
+    if (role !== 'gram_panchayat') {
+      return res.status(403).json({ error: 'Only gram panchayat can update ward jurisdictions' });
+    }
+
+    const rawGeometry = req.body?.geometry;
+    if (!rawGeometry || !['Polygon', 'MultiPolygon'].includes(rawGeometry.type)) {
+      return res.status(400).json({ error: 'Valid Polygon/MultiPolygon geometry is required' });
+    }
+
+    const { data: ward, error: wardErr } = await supabaseAdmin
+      .from('admins')
+      .select('id,parent_admin_id,role,is_active')
+      .eq('id', req.params.wardId)
+      .maybeSingle();
+    if (wardErr) throw wardErr;
+    if (!ward || ward.role !== 'ward_member' || !ward.is_active || ward.parent_admin_id !== req.admin.id) {
+      return res.status(404).json({ error: 'Ward member not found in your jurisdiction' });
+    }
+
+    const parentBoundaryFeature = await buildBoundaryFeatureForAdmin({ ...req.admin, ...me, role });
+    const clientParentBoundary = req.body?.parentBoundaryGeometry;
+    const validationBoundary = parentBoundaryFeature?.geometry || clientParentBoundary || null;
+    if (!validationBoundary) {
+      return res.status(400).json({ error: 'Parent jurisdiction boundary unavailable' });
+    }
+
+    const vertices = geometryVertices(rawGeometry);
+    if (!vertices.length) {
+      return res.status(400).json({ error: 'Geometry has no vertices' });
+    }
+
+    const allInside = vertices.every((p) => pointInGeometry(p, validationBoundary));
+    if (!allInside) {
+      return res.status(400).json({ error: 'Ward jurisdiction must be fully inside gram panchayat boundary' });
+    }
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from('admins')
+      .update({
+        jurisdiction_geom: rawGeometry,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', ward.id)
+      .eq('parent_admin_id', req.admin.id)
+      .select('id,name,jurisdiction_name,jurisdiction_geom')
+      .single();
+    if (updateErr) throw updateErr;
+
+    return res.json({ wardMember: updated });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to update ward jurisdiction' });
   }
 });
 

@@ -70,6 +70,12 @@ const NAV_ITEMS = [
         icon: BarChart2,
         roles: ['all'],
     },
+    {
+        path: '/marketplace-moderation',
+        label: 'Marketplace Moderation',
+        icon: Megaphone,
+        roles: ['zilla_parishad'],
+    },
 ];
 
 function Sidebar() {

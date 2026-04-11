@@ -1,5 +1,6 @@
 import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase.js';
+import { calculateTaskDueAt } from '../services/slaService.js';
 import {
 	completeTaskById,
 	getTaskById,
@@ -17,8 +18,8 @@ export const completeTaskUpload = upload.fields([
 
 function getWorkerContext(req) {
 	const userMetadata = req.user?.user_metadata || {};
-	const workerId = req.worker?.id || userMetadata.worker_id || req.query.worker_id || req.body.worker_id;
-	const villageId = req.worker?.village_id || userMetadata.village_id || req.query.village_id || req.body.village_id;
+	const workerId = req.worker?.id || userMetadata.worker_id || null;
+	const villageId = req.worker?.village_id || userMetadata.village_id || null;
 	return { workerId, villageId };
 }
 
@@ -182,14 +183,14 @@ export async function createTaskByAdmin(req, res) {
 			village_id: req.body?.village_id || null,
 			bin_id: req.body?.bin_id || null,
 			source_issue_id: sourceIssueId,
-			due_at: req.body?.due_at || null,
+			due_at: req.body?.due_at || calculateTaskDueAt(req.body?.priority || 2),
 			created_by_admin_id: req.admin.id,
 		};
 
 		if (sourceIssueId) {
 			const { data: issue } = await supabaseAdmin
 				.from('issue_reports')
-				.select('description,location_lat,location_lng,location_address,village_id,bin_id')
+				.select('description,location_lat,location_lng,location_address,village_id')
 				.eq('id', sourceIssueId)
 				.maybeSingle();
 
@@ -200,7 +201,6 @@ export async function createTaskByAdmin(req, res) {
 				payload.location_lng = payload.location_lng ?? issue.location_lng;
 				payload.location_address = payload.location_address || issue.location_address || null;
 				payload.village_id = payload.village_id || issue.village_id || null;
-				payload.bin_id = payload.bin_id || issue.bin_id || null;
 			}
 		}
 
@@ -210,6 +210,9 @@ export async function createTaskByAdmin(req, res) {
 
 		const { data, error } = await supabaseAdmin.from('tasks').insert(payload).select('*').single();
 		if (error) throw error;
+		if (sourceIssueId) {
+			await supabaseAdmin.from('issue_reports').update({ status: 'assigned', created_task_id: data.id, updated_at: new Date().toISOString() }).eq('id', sourceIssueId);
+		}
 		return res.status(201).json(data);
 	} catch (error) {
 		return res.status(500).json({ error: error.message || 'Failed to create task' });

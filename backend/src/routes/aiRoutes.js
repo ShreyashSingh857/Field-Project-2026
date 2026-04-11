@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
-import { scanWaste, chatWithAssistant } from '../controllers/aiController.js';
+import { scanWaste, chatWithAssistant, transcribeAudio } from '../controllers/aiController.js';
 
 const router = Router();
 
@@ -29,5 +29,6 @@ router.post(
 );
 
 router.post('/chat', verifySupabaseAuth, chatWithAssistant);
+router.post('/speech/transcribe', upload.single('audio'), transcribeAudio);
 
 export default router;

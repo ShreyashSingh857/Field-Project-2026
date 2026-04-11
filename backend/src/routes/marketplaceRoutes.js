@@ -1,7 +1,17 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
-import { getListings, createListing, deleteListing } from '../controllers/marketplaceController.js';
+import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
+import { requireRole } from '../middleware/requireRole.js';
+import {
+  getListings,
+  createListing,
+  deleteListing,
+  getPendingModerationQueue,
+  approveListing,
+  rejectListing,
+  banSeller,
+} from '../controllers/marketplaceController.js';
 
 const router = Router();
 const upload = multer({
@@ -12,8 +22,15 @@ const upload = multer({
   },
 });
 
-router.get('/', verifySupabaseAuth, getListings);
+// User endpoints
+router.get('/', getListings);
 router.post('/', verifySupabaseAuth, upload.single('photo'), createListing);
 router.delete('/:id', verifySupabaseAuth, deleteListing);
+
+// Admin moderation endpoints
+router.get('/moderation/queue', verifyAdminJWT, requireRole('zilla_parishad'), getPendingModerationQueue);
+router.post('/:id/approve', verifyAdminJWT, requireRole('zilla_parishad'), approveListing);
+router.post('/:id/reject', verifyAdminJWT, requireRole('zilla_parishad'), rejectListing);
+router.post('/sellers/:userId/ban', verifyAdminJWT, requireRole('zilla_parishad'), banSeller);
 
 export default router;

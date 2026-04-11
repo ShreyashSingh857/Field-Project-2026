@@ -1,5 +1,7 @@
 import { verifyToken } from '../services/jwtService.js';
 
+const ADMIN_ROLES = new Set(['zilla_parishad', 'block_samiti', 'gram_panchayat', 'ward_member']);
+
 export function verifyAdminJWT(req, res, next) {
   try {
     const auth = req.headers.authorization || '';
@@ -8,7 +10,9 @@ export function verifyAdminJWT(req, res, next) {
     }
 
     const decoded = verifyToken(auth.slice(7));
-    if (decoded?.type !== 'admin') {
+    const isAdminType = decoded?.type === 'admin';
+    const hasAdminRole = ADMIN_ROLES.has(String(decoded?.role || ''));
+    if (!isAdminType && !hasAdminRole) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

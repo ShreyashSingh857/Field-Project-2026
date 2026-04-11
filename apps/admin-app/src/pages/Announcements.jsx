@@ -76,11 +76,6 @@ function Announcements() {
             return;
         }
 
-        if (formData.content.trim().split('\n').length < 3) {
-            showToast('Please provide at least 3 lines of content', 'error');
-            return;
-        }
-
         try {
             setIsSubmitting(true);
             await createAnnouncement(formData, adminId);
@@ -90,7 +85,7 @@ function Announcements() {
             await loadAnnouncements();
         } catch (err) {
             console.error('Error creating announcement:', err);
-            showToast('Failed to post announcement', 'error');
+            showToast(err?.response?.data?.error || 'Failed to post announcement', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -320,7 +315,7 @@ function Announcements() {
                                         required
                                     ></textarea>
                                     <div className="admin-form-help">
-                                        Minimum 3 lines of content
+                                        Write a clear message for citizens.
                                     </div>
                                 </div>
 
@@ -330,7 +325,7 @@ function Announcements() {
                                         className="admin-form-select"
                                         value={formData.target_village_id || ''}
                                         onChange={(e) =>
-                                            setFormData({ ...formData, target_village_id: e.target.value ? parseInt(e.target.value) : null })
+                                            setFormData({ ...formData, target_village_id: e.target.value || null })
                                         }
                                     >
                                         <option value="">All Villages (Broadcast)</option>

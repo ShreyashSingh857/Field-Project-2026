@@ -409,27 +409,42 @@ function HierarchyManagement() {
 
                                     <div className="admin-form-group">
                                         <label className="admin-form-label required">{childJurisdictionLabel} Name</label>
-                                        <select
-                                            className="admin-form-select"
-                                            value={formData.lgd_jurisdiction_code}
-                                            onChange={(e) => {
-                                                const opt = childJurisdictionOptions.find((o) => String(o.lgd_code) === e.target.value);
-                                                setFormData({
+                                        {childJurisdictionOptions.length > 0 ? (
+                                            <select
+                                                className="admin-form-select"
+                                                value={formData.lgd_jurisdiction_code}
+                                                onChange={(e) => {
+                                                    const opt = childJurisdictionOptions.find((o) => String(o.lgd_code) === e.target.value);
+                                                    setFormData({
+                                                        ...formData,
+                                                        lgd_jurisdiction_code: e.target.value,
+                                                        jurisdiction_name: opt?.name || formData.jurisdiction_name,
+                                                    });
+                                                }}
+                                                required
+                                                disabled={optionsLoading}
+                                            >
+                                                <option value="">{optionsLoading ? `Loading ${childJurisdictionLabel.toLowerCase()}s...` : `Select a ${childJurisdictionLabel.toLowerCase()} from your list`}</option>
+                                                {childJurisdictionOptions.map((opt) => (
+                                                    <option key={opt.lgd_code || opt.name} value={opt.lgd_code || opt.name}>
+                                                        {opt.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                className="admin-form-input"
+                                                placeholder={`Enter ${childJurisdictionLabel.toLowerCase()} name manually`}
+                                                value={formData.jurisdiction_name}
+                                                onChange={(e) => setFormData({
                                                     ...formData,
-                                                    lgd_jurisdiction_code: e.target.value,
-                                                    jurisdiction_name: opt?.name || formData.jurisdiction_name,
-                                                });
-                                            }}
-                                            required
-                                            disabled={optionsLoading}
-                                        >
-                                            <option value="">{optionsLoading ? `Loading ${childJurisdictionLabel.toLowerCase()}s...` : `Select a ${childJurisdictionLabel.toLowerCase()} from your list`}</option>
-                                            {childJurisdictionOptions.map((opt) => (
-                                                <option key={opt.lgd_code || opt.name} value={opt.lgd_code || opt.name}>
-                                                    {opt.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                                    jurisdiction_name: e.target.value,
+                                                    lgd_jurisdiction_code: '',
+                                                })}
+                                                required
+                                            />
+                                        )}
                                         {optionsError && (
                                             <div style={{ fontSize: '11px', color: '#A32D2D', marginTop: '4px' }}>
                                                 {optionsError}

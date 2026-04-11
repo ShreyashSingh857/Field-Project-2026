@@ -40,6 +40,13 @@ export default function Dashboard() {
 	const cards = useMemo(
 		() => [
 			{
+				key: "announcements",
+				icon: MessageCircle,
+				title: "Announcements",
+				description: "View admin announcements and alerts.",
+				route: "/announcements",
+			},
+			{
 				key: "nearbyBins",
 				icon: MapPin,
 				title: t("cards.nearbyBins.title"),
@@ -66,14 +73,6 @@ export default function Dashboard() {
 				title: t("cards.reportIssue.title"),
 				description: t("cards.reportIssue.description"),
 				route: "/report",
-			},
-			{
-				key: "wasteTips",
-				icon: Leaf,
-				title: t("cards.wasteTips.title"),
-				description: t("cards.wasteTips.description"),
-				fullWidth: true,
-				route: "/tips",
 			},
 		],
 		[t],
@@ -131,7 +130,7 @@ export default function Dashboard() {
 					</div>
 					{userName ? (
 						<div className="ml-auto text-right">
-							<p className="max-w-[100px] truncate text-xs font-semibold text-black sm:max-w-[140px]">
+							<p className="max-w-25 truncate text-xs font-semibold text-black sm:max-w-35">
 								{userName}
 							</p>
 							{villageName ? (

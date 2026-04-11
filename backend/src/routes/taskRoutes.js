@@ -9,6 +9,7 @@ import {
 	updateTaskStatusByAdmin,
 } from '../controllers/taskController.js';
 import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
+import { verifyWorkerJWT } from '../middleware/verifyWorkerJWT.js';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
 import { verifyToken } from '../services/jwtService.js';
 
@@ -36,26 +37,10 @@ const verifyTaskReadAccess = async (req, res, next) => {
 	return verifySupabaseAuth(req, res, next);
 };
 
-const verifyTaskWorkerAccess = async (req, res, next) => {
-	const auth = req.headers.authorization || '';
-	if (auth.startsWith('Bearer ')) {
-		try {
-			const decoded = verifyToken(auth.slice(7));
-			if (decoded?.type === 'worker') {
-				req.worker = decoded;
-				return next();
-			}
-		} catch (_e) {
-			// fall through
-		}
-	}
-	return verifySupabaseAuth(req, res, next);
-};
-
 router.get('/', verifyTaskReadAccess, listTasks);
 router.get('/:id', verifyTaskReadAccess, getTask);
-router.patch('/:id/start', verifyTaskWorkerAccess, startTask);
-router.patch('/:id/complete', verifyTaskWorkerAccess, completeTaskUpload, completeTask);
+router.patch('/:id/start', verifyWorkerJWT, startTask);
+router.patch('/:id/complete', verifyWorkerJWT, completeTaskUpload, completeTask);
 
 router.post('/', verifyAdminJWT, createTaskByAdmin);
 router.patch('/:id/status', verifyAdminJWT, updateTaskStatusByAdmin);

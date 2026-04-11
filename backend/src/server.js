@@ -6,7 +6,6 @@ import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import binsRoutes from './routes/binsRoutes.js';
 import recyclingRoutes from './routes/recyclingRoutes.js';
-import aiRoute from './routes/aiRoute.js';
 import taskRoutes from './routes/taskRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
@@ -16,6 +15,8 @@ import escalationRoutes from './routes/escalationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import workerRoutes from './routes/workerRoutes.js';
 import sensorRoutes from './routes/sensorRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import { buildOperationalSummary } from './services/reportingService.js';
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -58,7 +59,6 @@ app.use('/api/ai/', aiLimiter);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/ai/speech', aiRoute);
 app.use('/api/bins', binsRoutes);
 app.use('/api/recycling-centers', recyclingRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -70,8 +70,14 @@ app.use('/api/escalations', escalationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/sensors', sensorRoutes);
-app.get('/api/reports', (_req, res) => {
-  res.json({ reports: [] });
+app.use('/api/notifications', notificationRoutes);
+app.get('/api/reports', async (_req, res, next) => {
+  try {
+    const summary = await buildOperationalSummary();
+    res.json({ reports: [], summary });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── Global error handler ────────────────────────────────────

@@ -18,6 +18,7 @@ import EscalationPanel from '../pages/EscalationPanel';
 import HierarchyManagement from '../pages/HierarchyManagement';
 import Reports from '../pages/Reports';
 import Announcements from '../pages/Announcements';
+import MarketplaceModerationDashboard from '../components/MarketplaceModerationDashboard';
 
 // RoleGate component - restricts access based on role
 function RoleGate({ allowedRoles, children }) {
@@ -76,11 +77,18 @@ function AppRoutes() {
                         </RoleGate>
                     }
                 />
-                <Route
-                    path="/issues"
+                <Route path="/issues"
                     element={
                         <RoleGate allowedRoles={['ward_member']}>
                             <IssueManagement />
+                        </RoleGate>
+                    }
+                />
+                <Route
+                    path="/marketplace-moderation"
+                    element={
+                        <RoleGate allowedRoles={['zilla_parishad']}>
+                            <MarketplaceModerationDashboard />
                         </RoleGate>
                     }
                 />

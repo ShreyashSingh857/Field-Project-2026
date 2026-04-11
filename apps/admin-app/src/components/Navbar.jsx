@@ -4,6 +4,7 @@ import { Leaf, LogOut, ChevronDown } from 'lucide-react';
 import { selectAdmin, selectRole, logout } from '../features/auth/authSlice';
 import { ROLE_LABELS } from '../utils/constants';
 import { useState } from 'react';
+import NotificationCenter from './NotificationCenter';
 
 export default function Navbar() {
     const admin = useSelector(selectAdmin);
@@ -25,6 +26,8 @@ export default function Navbar() {
             </a>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <NotificationCenter />
+
                 {/* Role Badge */}
                 <div
                     style={{

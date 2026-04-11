@@ -16,7 +16,7 @@ export async function createIssue(req, res) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { description, location_lat, location_lng, location_address, bin_id } = req.body;
+    const { description, location_lat, location_lng, location_address } = req.body;
     const photoBuckets = ['issue-photos', 'issue-audio'];
     
     // Default handles for uploaded files
@@ -50,25 +50,22 @@ export async function createIssue(req, res) {
     }
 
     // Insert into DB
+    const parsedLat = location_lat != null ? Number(location_lat) : null;
+    const parsedLng = location_lng != null ? Number(location_lng) : null;
+    if (parsedLat == null || Number.isNaN(parsedLat) || parsedLng == null || Number.isNaN(parsedLng)) {
+      return res.status(400).json({ error: 'location_lat and location_lng are required' });
+    }
+
     const insertData = {
-        description: description || '',
-      location_lat: location_lat != null ? parseFloat(location_lat) : null,
-      location_lng: location_lng != null ? parseFloat(location_lng) : null,
-        location_address: location_address || '',
-        bin_id: bin_id || null,
-        photo_url: photoUrl,
-        status: 'open',
-        user_id: req.user.id,
+      description: description || '',
+      location_lat: parsedLat,
+      location_lng: parsedLng,
+      location_address: location_address || '',
+      photo_url: photoUrl,
+      status: 'open',
+      user_id: req.user.id,
+      village_id: req.user.user_metadata?.village_id || null,
     };
-    
-    // Clean nulls to prevent constraint errors if column isn't strictly nullable
-    if (!insertData.bin_id) delete insertData.bin_id;
-    if (insertData.location_lat == null || isNaN(insertData.location_lat)) {
-      delete insertData.location_lat;
-    }
-    if (insertData.location_lng == null || isNaN(insertData.location_lng)) {
-      delete insertData.location_lng;
-    }
 
     const { data, error } = await supabaseAdmin
       .from('issue_reports')
