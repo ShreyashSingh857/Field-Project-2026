@@ -8,7 +8,7 @@ import { verifyWorkerJWT } from '../middleware/verifyWorkerJWT.js';
 
 const router = Router();
 
-async function resolveVillageForPanchayatAdmin(adminId, requestedVillageId) {
+async function resolveVillageForWardMember(adminId, requestedVillageId) {
   if (requestedVillageId) {
     const { data: explicitVillage, error: explicitErr } = await supabaseAdmin
       .from('villages')
@@ -60,7 +60,7 @@ function generateWorkerPassword() {
 router.post('/login', workerLogin);
 router.get('/me', verifyWorkerJWT, workerMe);
 
-router.get('/area-options', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.get('/area-options', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { data: me, error: meErr } = await supabaseAdmin
       .from('admins')
@@ -69,22 +69,22 @@ router.get('/area-options', verifyAdminJWT, requireRole('panchayat_admin'), asyn
       .single();
     if (meErr) throw meErr;
 
-    let query = supabaseAdmin.from('admins').select('id,name,jurisdiction_name').eq('role', 'panchayat_admin').eq('is_active', true);
+    let query = supabaseAdmin.from('admins').select('id,name,jurisdiction_name').eq('role', 'ward_member').eq('is_active', true);
     if (me.parent_admin_id) query = query.eq('parent_admin_id', me.parent_admin_id);
     else query = query.eq('id', me.id);
 
     const { data, error } = await query.order('name', { ascending: true });
     if (error) throw error;
 
-    const options = (data || []).map((a) => ({ id: a.id, label: a.name || a.jurisdiction_name || 'Panchayat Admin' }));
-    if (!options.some((o) => o.id === me.id)) options.unshift({ id: me.id, label: me.name || 'Panchayat Admin' });
-    return res.json({ options, defaultArea: me.name || 'Panchayat Admin' });
+    const options = (data || []).map((a) => ({ id: a.id, label: a.name || a.jurisdiction_name || 'Ward Member Area' }));
+    if (!options.some((o) => o.id === me.id)) options.unshift({ id: me.id, label: me.name || 'Ward Member Area' });
+    return res.json({ options, defaultArea: me.name || 'Ward Member Area' });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to load area options' });
   }
 });
 
-router.get('/', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.get('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('workers')
@@ -99,7 +99,7 @@ router.get('/', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res)
   }
 });
 
-router.get('/:id', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.get('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('workers')
@@ -114,7 +114,7 @@ router.get('/:id', verifyAdminJWT, requireRole('panchayat_admin'), async (req, r
   }
 });
 
-router.post('/', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.post('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { name, phone, assigned_area, village_id, language, password } = req.body || {};
     const { data: me } = await supabaseAdmin.from('admins').select('id,name').eq('id', req.admin.id).maybeSingle();
@@ -124,7 +124,7 @@ router.post('/', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res
     }
 
     const employee_id = generateEmployeeId();
-    const resolvedVillageId = await resolveVillageForPanchayatAdmin(req.admin.id, village_id || null);
+    const resolvedVillageId = await resolveVillageForWardMember(req.admin.id, village_id || null);
     const rawPassword = String(password || generateWorkerPassword());
     const password_hash = await bcrypt.hash(rawPassword, 10);
 
@@ -151,7 +151,7 @@ router.post('/', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res
   }
 });
 
-router.patch('/:id', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('workers')
@@ -167,7 +167,7 @@ router.patch('/:id', verifyAdminJWT, requireRole('panchayat_admin'), async (req,
   }
 });
 
-router.patch('/:id/status', verifyAdminJWT, requireRole('panchayat_admin'), async (req, res) => {
+router.patch('/:id/status', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
     const { is_active } = req.body || {};
     const { data, error } = await supabaseAdmin

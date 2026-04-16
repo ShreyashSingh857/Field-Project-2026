@@ -174,7 +174,7 @@ export default function BinsMapPage() {
             {showBins && mappedBins.map((b) => (
               <Marker key={b.id} position={[b.location_lat, b.location_lng]} icon={binIcon(b.fill_level)}>
                 <Popup>
-                  <div className="space-y-2 min-w-[160px]">
+                  <div className="min-w-40 space-y-2">
                     <p className="text-sm font-bold text-black">{b.label || 'Smart Bin'}</p>
                     <p className="text-xs" style={{ color: 'var(--clay-muted)' }}>
                       Type: <strong>{b.bin_type || 'general'}</strong>
@@ -205,7 +205,7 @@ export default function BinsMapPage() {
             {showCenters && mappedCenters.map((c) => (
               <Marker key={c.id} position={[c.location_lat, c.location_lng]} icon={ICONS.recycling}>
                 <Popup>
-                  <div className="space-y-1 min-w-[160px]">
+                  <div className="min-w-40 space-y-1">
                     <p className="text-sm font-bold text-black">♻️ {c.name}</p>
                     {c.address && <p className="text-xs" style={{ color: 'var(--clay-muted)' }}>{c.address}</p>}
                     {Array.isArray(c.accepts) && c.accepts.length > 0 && (
@@ -219,7 +219,7 @@ export default function BinsMapPage() {
 
           {/* ── Legend ── */}
           <div
-            className="absolute bottom-6 left-4 z-[1000] rounded-2xl p-3 text-xs space-y-2"
+            className="absolute bottom-6 left-4 z-1000 space-y-2 rounded-2xl p-3 text-xs"
             style={{ backgroundColor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', minWidth: 170 }}
           >
             <p className="font-bold text-black text-sm mb-2">Legend</p>
@@ -264,11 +264,11 @@ function LegendRow({ icon, label, dotColor, isDot }) {
   return (
     <div className="flex items-center gap-2">
       {isDot ? (
-        <div className="relative flex-shrink-0 w-5 h-5 flex items-center justify-center">
+        <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
           <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: dotColor, border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
         </div>
       ) : (
-        <img src={icon} alt={label} className="flex-shrink-0 object-contain" style={{ width: 20, height: 20 }} />
+        <img src={icon} alt={label} className="shrink-0 object-contain" style={{ width: 20, height: 20 }} />
       )}
       <span className="text-black text-[11px]">{label}</span>
     </div>

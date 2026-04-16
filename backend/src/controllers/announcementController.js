@@ -30,13 +30,18 @@ export async function createAnnouncement(req, res) {
       return res.status(400).json({ error: 'title and content are required' });
     }
 
+    const villageId =
+      typeof target_village_id === 'string' && /^[0-9a-f-]{36}$/i.test(target_village_id)
+        ? target_village_id
+        : null;
+
     const { data, error } = await supabaseAdmin
       .from('announcements')
       .insert({
         created_by: req.admin.id,
         title,
         content,
-        target_village_id: target_village_id || null,
+        target_village_id: villageId,
         is_pinned: Boolean(is_pinned),
         is_active: true,
       })

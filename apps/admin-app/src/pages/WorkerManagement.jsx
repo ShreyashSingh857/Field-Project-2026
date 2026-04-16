@@ -337,7 +337,7 @@ function WorkerManagement() {
                                             disabled={areaOptions.length === 0}
                                         >
                                             <option value="">
-                                                {areaOptions.length === 0 ? 'No panchayat admin areas found' : 'Select panchayat admin area'}
+                                                {areaOptions.length === 0 ? 'No area options found' : 'Select assigned area'}
                                             </option>
                                             {areaOptions.map((opt) => (
                                                 <option key={opt.id} value={opt.label}>{opt.label}</option>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Trash2, Pin, Loader } from 'lucide-react';
-import { selectAdminId } from '../features/auth/authSlice';
+import { selectAdminId, selectRole } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
 import {
     fetchAnnouncements,
@@ -14,6 +14,7 @@ import supabase from '../services/supabaseClient';
 function Announcements() {
     const dispatch = useDispatch();
     const adminId = useSelector(selectAdminId);
+    const role = useSelector(selectRole);
     const { toast, showToast } = useToast();
 
     const [announcements, setAnnouncements] = useState([]);
@@ -75,11 +76,6 @@ function Announcements() {
             return;
         }
 
-        if (formData.content.trim().split('\n').length < 3) {
-            showToast('Please provide at least 3 lines of content', 'error');
-            return;
-        }
-
         try {
             setIsSubmitting(true);
             await createAnnouncement(formData, adminId);
@@ -89,7 +85,7 @@ function Announcements() {
             await loadAnnouncements();
         } catch (err) {
             console.error('Error creating announcement:', err);
-            showToast('Failed to post announcement', 'error');
+            showToast(err?.response?.data?.error || 'Failed to post announcement', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -144,12 +140,14 @@ function Announcements() {
 
             <div className="admin-flex-between" style={{ marginBottom: '24px' }}>
                 <h1 className="admin-page-title" style={{ margin: 0 }}>Announcements</h1>
-                <button
-                    className="admin-btn-primary"
-                    onClick={() => setShowModal(true)}
-                >
-                    <Plus size={18} /> Post New
-                </button>
+                {role !== 'ward_member' && (
+                    <button
+                        className="admin-btn-primary"
+                        onClick={() => setShowModal(true)}
+                    >
+                        <Plus size={18} /> Post New
+                    </button>
+                )}
             </div>
 
             {error && (
@@ -254,22 +252,24 @@ function Announcements() {
                                 {new Date(announcement.created_at).toLocaleDateString('en-IN')}
                             </div>
 
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    className="admin-btn-outline admin-btn-sm"
-                                    style={{ fontSize: '11px', flex: 1 }}
-                                    onClick={() => handleTogglePin(announcement.id, announcement.is_pinned)}
-                                >
-                                    <Pin size={14} /> {announcement.is_pinned ? 'Unpin' : 'Pin'}
-                                </button>
-                                <button
-                                    className="admin-btn-outline admin-btn-sm danger"
-                                    style={{ fontSize: '11px', flex: 1 }}
-                                    onClick={() => handleDeleteAnnouncement(announcement.id)}
-                                >
-                                    <Trash2 size={14} /> Delete
-                                </button>
-                            </div>
+                            {role !== 'ward_member' && (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        className="admin-btn-outline admin-btn-sm"
+                                        style={{ fontSize: '11px', flex: 1 }}
+                                        onClick={() => handleTogglePin(announcement.id, announcement.is_pinned)}
+                                    >
+                                        <Pin size={14} /> {announcement.is_pinned ? 'Unpin' : 'Pin'}
+                                    </button>
+                                    <button
+                                        className="admin-btn-outline admin-btn-sm danger"
+                                        style={{ fontSize: '11px', flex: 1 }}
+                                        onClick={() => handleDeleteAnnouncement(announcement.id)}
+                                    >
+                                        <Trash2 size={14} /> Delete
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -315,7 +315,7 @@ function Announcements() {
                                         required
                                     ></textarea>
                                     <div className="admin-form-help">
-                                        Minimum 3 lines of content
+                                        Write a clear message for citizens.
                                     </div>
                                 </div>
 
@@ -325,7 +325,7 @@ function Announcements() {
                                         className="admin-form-select"
                                         value={formData.target_village_id || ''}
                                         onChange={(e) =>
-                                            setFormData({ ...formData, target_village_id: e.target.value ? parseInt(e.target.value) : null })
+                                            setFormData({ ...formData, target_village_id: e.target.value || null })
                                         }
                                     >
                                         <option value="">All Villages (Broadcast)</option>

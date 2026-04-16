@@ -139,7 +139,7 @@ export function verifyAdminJWT(req, res, next) {
 
 ```javascript
 // middleware/requireRole.js
-// Usage: requireRole('panchayat_admin') or requireRole(['block_samiti', 'zilla_parishad'])
+// Usage: requireRole('ward_member') or requireRole(['block_samiti', 'zilla_parishad'])
 export function requireRole(roles) {
   const allowed = Array.isArray(roles) ? roles : [roles];
   return (req, res, next) => {
@@ -204,14 +204,14 @@ Fetch single bin detail.
 
 #### `POST /api/bins`
 Create a new bin.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ label, location_lat, location_lng, location_address, village_id }`
 - **Logic:** Sets `assigned_panchayat_id` to `req.admin.id`.
 - **Response 201:** Created bin object.
 
 #### `PATCH /api/bins/:id`
 Update bin info (label, address, active status).
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** Any of `{ label, location_address, is_active }`
 - **Response 200:** Updated bin object.
 
@@ -236,7 +236,7 @@ IoT sensor pushes fill level update. This is the future-ready sensor endpoint.
 Fetch tasks. Scoped by caller's identity.
 - **Auth:** `verifyWorkerJWT` OR `verifyAdminJWT`
 - **Worker:** Returns tasks where `assigned_worker_id = req.worker.id` OR tasks in `village_id = req.worker.village_id` with `status = 'pending'` (unassigned area tasks and reported issues).
-- **Admin (panchayat_admin):** Returns all tasks created by this admin or in their villages.
+- **Admin (ward_member):** Returns all tasks created by this admin or in their villages.
 - **Admin (higher levels):** Returns aggregated tasks across all jurisdictions below them.
 - **Query:** `?status=pending|assigned|done` `?village_id=uuid` `?type=bin_clean|litter_pickup`
 - **Response 200:** `{ tasks: [ { id, type, title, description, location_lat, location_lng, location_address, status, priority, assigned_worker_id, created_at, due_at } ] }`
@@ -248,7 +248,7 @@ Fetch single task with full detail.
 
 #### `POST /api/tasks`
 Create a new task manually.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ type, title, description, location_lat, location_lng, location_address, priority, village_id, assigned_worker_id?, bin_id?, due_at? }`
 - **Logic:**
   1. Create task with `created_by_admin_id = req.admin.id`.
@@ -258,7 +258,7 @@ Create a new task manually.
 
 #### `PATCH /api/tasks/:id/assign`
 Assign a task to a worker.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ worker_id: uuid }`
 - **Logic:** Update `assigned_worker_id`, set `status = 'assigned'`, log in `task_status_log`.
 - **Response 200:** Updated task.
@@ -284,7 +284,7 @@ Worker marks task as done and uploads proof photo.
 
 #### `PATCH /api/tasks/:id/cancel`
 Cancel a task.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ reason?: string }`
 - **Logic:** Set `status = 'cancelled'`. Log in `task_status_log`.
 - **Response 200:** Updated task.
@@ -312,7 +312,7 @@ Fetch issues. Scoped by caller.
 
 #### `PATCH /api/issues/:id/convert`
 Admin converts an issue into a worker task.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ assigned_worker_id?: uuid, priority?: 1|2|3, due_at?: string }`
 - **Logic:**
   1. Create a new `tasks` row with `source_issue_id`, `reported_by_user_id`, location from the issue, `type = 'other'` (or admin can override).
@@ -322,7 +322,7 @@ Admin converts an issue into a worker task.
 
 #### `PATCH /api/issues/:id/reject`
 Admin rejects an issue report.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ reason: string }`
 - **Logic:** Set `status = 'rejected'`, `rejection_reason`, `reviewed_by`.
 - **Response 200:** Updated issue.
@@ -399,8 +399,8 @@ Create an admin account for the level directly below.
   1. Determine `role` of new admin based on `req.admin.role`:
      - `zilla_parishad` → creates `block_samiti`
      - `block_samiti` → creates `gram_panchayat`
-     - `gram_panchayat` → creates `panchayat_admin`
-     - `panchayat_admin` → FORBIDDEN (use worker create endpoint instead)
+     - `gram_panchayat` → creates `ward_member`
+     - `ward_member` → FORBIDDEN (use worker create endpoint instead)
   2. Hash password with bcrypt (rounds: 12).
   3. Insert into `admins` with `parent_admin_id = req.admin.id`, `created_by = req.admin.id`.
 - **Response 201:** `{ id, name, email, role, jurisdiction_name }`
@@ -414,7 +414,7 @@ Deactivate a sub-admin account.
 #### `GET /api/admin/dashboard`
 Aggregated stats for the admin's jurisdiction.
 - **Auth:** `verifyAdminJWT`
-- **Logic:** Scoped by role — panchayat_admin gets village-level stats, higher roles get aggregated counts.
+- **Logic:** Scoped by role — ward_member gets village-level stats, higher roles get aggregated counts.
 - **Response 200:**
 ```json
 {
@@ -431,7 +431,7 @@ Aggregated stats for the admin's jurisdiction.
 
 #### `POST /api/workers`
 Create a new Safai Mitra worker account.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Body:** `{ name, phone?, assigned_area, village_id }`
 - **Logic:**
   1. Auto-generate `employee_id` in format `GWC-WRK-XXXX` (sequential, padded).
@@ -442,8 +442,8 @@ Create a new Safai Mitra worker account.
 - **Response 201:** `{ id, name, employee_id, temp_password, assigned_area }`
 
 #### `GET /api/workers`
-List all workers created by this panchayat admin.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+List all workers created by this Ward Member.
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Response 200:** `{ workers: [ { id, name, employee_id, assigned_area, is_active, last_login_at } ] }`
 
 #### `GET /api/workers/:id`
@@ -454,7 +454,7 @@ Worker's own profile.
 
 #### `PATCH /api/workers/:id/deactivate`
 Deactivate a worker.
-- **Auth:** `verifyAdminJWT` + `requireRole('panchayat_admin')`
+- **Auth:** `verifyAdminJWT` + `requireRole('ward_member')`
 - **Logic:** Verify worker's `created_by_admin_id = req.admin.id`. Set `is_active = FALSE`.
 - **Response 200:** `{ message: 'Worker deactivated' }`
 

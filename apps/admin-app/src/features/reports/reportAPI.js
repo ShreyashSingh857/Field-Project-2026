@@ -1,11 +1,12 @@
 import api from '../../services/axiosInstance';
 
-async function fetchBaseData() {
+async function fetchBaseData(role) {
+	const canLoadWorkers = role === 'ward_member';
   const [tasksRes, binsRes, issuesRes, workersRes] = await Promise.allSettled([
     api.get('/tasks'),
     api.get('/bins'),
     api.get('/issues'),
-    api.get('/workers'),
+    canLoadWorkers ? api.get('/workers') : Promise.resolve({ data: { workers: [] } }),
   ]);
   return {
     tasks: tasksRes.status === 'fulfilled' ? tasksRes.value.data?.tasks || [] : [],
@@ -20,8 +21,8 @@ function dayKey(iso) {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
-export async function getTaskCompletionByDay() {
-  const { tasks } = await fetchBaseData();
+export async function getTaskCompletionByDay(role) {
+  const { tasks } = await fetchBaseData(role);
   const byDay = {};
   tasks.forEach((t) => {
     const key = dayKey(t.created_at || t.updated_at);
@@ -33,16 +34,16 @@ export async function getTaskCompletionByDay() {
   return Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day));
 }
 
-export async function getBinFillHistory() {
-  const { bins } = await fetchBaseData();
+export async function getBinFillHistory(role) {
+  const { bins } = await fetchBaseData(role);
   const avgFill = bins.length
     ? Number((bins.reduce((acc, b) => acc + Number(b.fill_level ?? 0), 0) / bins.length).toFixed(1))
     : 0;
   return [{ day: new Date().toISOString().slice(0, 10), averageFill: avgFill }];
 }
 
-export async function getWorkerPerformance() {
-  const { tasks, workers } = await fetchBaseData();
+export async function getWorkerPerformance(role) {
+  const { tasks, workers } = await fetchBaseData(role);
   return workers.map((w) => {
     const assigned = tasks.filter((t) => t.assigned_worker_id === w.id).length;
     const completed = tasks.filter((t) => t.assigned_worker_id === w.id && t.status === 'done').length;
@@ -51,8 +52,8 @@ export async function getWorkerPerformance() {
   });
 }
 
-export async function getIssueResolutionStats() {
-  const { issues } = await fetchBaseData();
+export async function getIssueResolutionStats(role) {
+  const { issues } = await fetchBaseData(role);
   const open = issues.filter((i) => i.status === 'open').length;
   const assigned = issues.filter((i) => i.status === 'assigned').length;
   const resolved = issues.filter((i) => i.status === 'resolved').length;
@@ -71,8 +72,8 @@ export async function getIssueResolutionStats() {
   };
 }
 
-export async function getBinStatusDistribution() {
-  const { bins } = await fetchBaseData();
+export async function getBinStatusDistribution(role) {
+  const { bins } = await fetchBaseData(role);
   const counts = { Low: 0, Medium: 0, High: 0 };
   bins.forEach((b) => {
     const fill = Number(b.fill_level ?? 0);
@@ -87,8 +88,8 @@ export async function getBinStatusDistribution() {
   ];
 }
 
-export async function getAggregatePerformanceByPanchayat() {
-  const { tasks } = await fetchBaseData();
+export async function getAggregatePerformanceByPanchayat(role) {
+  const { tasks } = await fetchBaseData(role);
   const grouped = {};
   tasks.forEach((t) => {
     const key = t.village_id || 'unassigned';

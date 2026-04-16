@@ -18,6 +18,7 @@ import EscalationPanel from '../pages/EscalationPanel';
 import HierarchyManagement from '../pages/HierarchyManagement';
 import Reports from '../pages/Reports';
 import Announcements from '../pages/Announcements';
+import MarketplaceModerationDashboard from '../components/MarketplaceModerationDashboard';
 
 // RoleGate component - restricts access based on role
 function RoleGate({ allowedRoles, children }) {
@@ -48,15 +49,22 @@ function AppRoutes() {
                 {/* Accessible to all roles */}
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/bins" element={<BinMap />} />
+                <Route
+                    path="/bins"
+                    element={
+                        <RoleGate allowedRoles={['ward_member', 'gram_panchayat', 'block_samiti', 'zilla_parishad']}>
+                            <BinMap />
+                        </RoleGate>
+                    }
+                />
                 <Route path="/announcements" element={<Announcements />} />
                 <Route path="/reports" element={<Reports />} />
 
-                {/* panchayat_admin only */}
+                {/* ward_member only */}
                 <Route
                     path="/tasks"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <TaskManagement />
                         </RoleGate>
                     }
@@ -64,16 +72,23 @@ function AppRoutes() {
                 <Route
                     path="/workers"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <WorkerManagement />
                         </RoleGate>
                     }
                 />
-                <Route
-                    path="/issues"
+                <Route path="/issues"
                     element={
-                        <RoleGate allowedRoles={['panchayat_admin']}>
+                        <RoleGate allowedRoles={['ward_member']}>
                             <IssueManagement />
+                        </RoleGate>
+                    }
+                />
+                <Route
+                    path="/marketplace-moderation"
+                    element={
+                        <RoleGate allowedRoles={['zilla_parishad']}>
+                            <MarketplaceModerationDashboard />
                         </RoleGate>
                     }
                 />

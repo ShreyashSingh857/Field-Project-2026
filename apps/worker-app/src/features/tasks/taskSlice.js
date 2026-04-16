@@ -63,8 +63,8 @@ export const completeTask = createAsyncThunk(
 
 export const initTaskRealtime = createAsyncThunk(
   'tasks/initRealtime',
-  async ({ villageId }, { dispatch }) => {
-    if (!supabase || !villageId) {
+  async ({ villageId, workerId }, { dispatch }) => {
+    if (!supabase || (!villageId && !workerId)) {
       return null;
     }
 
@@ -77,7 +77,7 @@ export const initTaskRealtime = createAsyncThunk(
       .channel(`worker-realtime-${villageId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `village_id=eq.${villageId}` },
+        villageId ? { event: '*', schema: 'public', table: 'tasks', filter: `village_id=eq.${villageId}` } : { event: 'INSERT', schema: 'public', table: 'tasks' },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             dispatch(taskDeleted(payload.old.id));
@@ -89,7 +89,19 @@ export const initTaskRealtime = createAsyncThunk(
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'bins', filter: `village_id=eq.${villageId}` },
+        workerId ? { event: '*', schema: 'public', table: 'tasks', filter: `assigned_worker_id=eq.${workerId}` } : { event: 'INSERT', schema: 'public', table: 'tasks' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            dispatch(taskDeleted(payload.old.id));
+            return;
+          }
+
+          dispatch(taskUpserted(payload.new));
+        }
+      )
+      .on(
+        'postgres_changes',
+        villageId ? { event: 'UPDATE', schema: 'public', table: 'bins', filter: `village_id=eq.${villageId}` } : { event: 'UPDATE', schema: 'public', table: 'bins' },
         ({ new: updatedBin }) => {
           dispatch(binPatched(updatedBin));
         }

@@ -6,3 +6,19 @@ backend/.env
 apps/*/.env
 apps/*/dist
 backend/dist
+**/__pycache__/
+*.pyc
+backend/data/geo-cache/
+backend/data/boundary-cache/
+backend/public/geo/
+
+# Temporary implementation notes/scripts
+MARKETPLACE_IMPLEMENTATION_COMPLETE.md
+MARKETPLACE_QUICK_START.md
+MARKETPLACE_STATUS_FINAL.md
+backend/MARKETPLACE_IMPLEMENTATION_SUMMARY.md
+backend/MARKETPLACE_MODERATION_PLAN.md
+backend/MIGRATE_MARKETPLACE_MODERATION.sql
+backend/scripts/applyMigration.js
+backend/scripts/checkTables.js
+backend/scripts/fetchSchema.js

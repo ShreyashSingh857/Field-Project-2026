@@ -38,7 +38,9 @@ const TaskDashboard = () => {
 
     dispatch(loadTasks({ workerId: worker.id, villageId: worker.village_id }));
     if (worker.village_id) {
-      dispatch(initTaskRealtime({ villageId: worker.village_id }));
+      dispatch(initTaskRealtime({ villageId: worker.village_id, workerId: worker.id }));
+    } else {
+      dispatch(initTaskRealtime({ workerId: worker.id }));
     }
 
     return () => {
@@ -57,7 +59,7 @@ const TaskDashboard = () => {
   };
 
   return (
-    <div className="bg-[var(--sm-bg)] min-h-screen">
+    <div className="bg-(--sm-bg) min-h-screen">
       <Navbar
         workerName={worker?.name || 'Worker'}
         area={worker?.assigned_area || 'Assigned Area'}
@@ -68,20 +70,20 @@ const TaskDashboard = () => {
       <div className="sm-page">
         <div className="bg-white rounded-lg p-4 shadow-sm mb-6 flex justify-between items-center border border-gray-100">
           <div>
-            <div className="text-[var(--sm-text-muted)] text-[12px] font-medium mb-1">{t('todayTasks')}</div>
-            <div className="text-[20px] font-bold text-[var(--sm-text)]">
+            <div className="text-(--sm-text-muted) text-[12px] font-medium mb-1">{t('todayTasks')}</div>
+            <div className="text-[20px] font-bold text-(--sm-text)">
               {tasksCompleted} / {cardTasks.length}
-              <span className="text-[14px] font-normal text-[var(--sm-text-muted)] ml-2">{t('tasksCompleted')}</span>
+              <span className="text-[14px] font-normal text-(--sm-text-muted) ml-2">{t('tasksCompleted')}</span>
             </div>
           </div>
-          <div className="w-12 h-12 rounded-full border-4 border-[var(--sm-primary)] flex items-center justify-center font-bold text-[var(--sm-primary)]">
+          <div className="w-12 h-12 rounded-full border-4 border-(--sm-primary) flex items-center justify-center font-bold text-(--sm-primary)">
             {Math.round((tasksCompleted / totalTasks) * 100)}%
           </div>
         </div>
 
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-[16px] font-bold text-[var(--sm-text)]">{t('todayTasks')}</h2>
-          <span className="text-[12px] text-[var(--sm-text-muted)]">{cardTasks.length} {t('assigned')}</span>
+          <h2 className="text-[16px] font-bold text-(--sm-text)">{t('todayTasks')}</h2>
+          <span className="text-[12px] text-(--sm-text-muted)">{cardTasks.length} {t('assigned')}</span>
         </div>
 
         {loading && <div className="text-sm text-gray-600 mb-3">Loading tasks...</div>}

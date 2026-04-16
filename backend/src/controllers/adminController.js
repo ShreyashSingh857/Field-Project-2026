@@ -7,7 +7,7 @@ const DEMO_ADMINS = {
   'zillaparishad@demo.gramwaste.local': { id: '00000000-0000-0000-0000-000000000101', role: 'zilla_parishad', jurisdiction_name: 'Pune District', name: 'Zilla Parishad Admin' },
   'blocksamiti@demo.gramwaste.local': { id: '00000000-0000-0000-0000-000000000102', role: 'block_samiti', jurisdiction_name: 'Haveli Block', name: 'Block Samiti Admin' },
   'grampanchayat@demo.gramwaste.local': { id: '00000000-0000-0000-0000-000000000103', role: 'gram_panchayat', jurisdiction_name: 'Uruli Kanchan GP', name: 'Gram Panchayat Admin' },
-  'panchayat@demo.gramwaste.local': { id: '00000000-0000-0000-0000-000000000104', role: 'panchayat_admin', jurisdiction_name: 'Gokul Nagar', name: 'Panchayat Admin' },
+  'wardmember@demo.gramwaste.local': { id: '00000000-0000-0000-0000-000000000104', role: 'ward_member', jurisdiction_name: 'Gokul Nagar', name: 'Ward Member' },
 };
 
 export async function adminLogin(req, res) {
@@ -21,7 +21,7 @@ export async function adminLogin(req, res) {
 
     const { data: admin, error } = await supabaseAdmin
       .from('admins')
-      .select('id,name,email,role,jurisdiction_name,password_hash,is_active')
+      .select('id,name,email,role,jurisdiction_name,lgd_jurisdiction_code,password_hash,is_active')
       .ilike('email', email)
       .maybeSingle();
 
@@ -33,11 +33,12 @@ export async function adminLogin(req, res) {
           role: demoAdmin.role,
           type: 'admin',
           jurisdiction_name: demoAdmin.jurisdiction_name,
+          lgd_jurisdiction_code: null,
           name: demoAdmin.name,
           email,
           demo: true,
         });
-        return res.json({ token, admin: { id: demoAdmin.id, name: demoAdmin.name, email, role: demoAdmin.role, jurisdiction_name: demoAdmin.jurisdiction_name } });
+        return res.json({ token, admin: { id: demoAdmin.id, name: demoAdmin.name, email, role: demoAdmin.role, jurisdiction_name: demoAdmin.jurisdiction_name, lgd_jurisdiction_code: null } });
       }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -54,6 +55,7 @@ export async function adminLogin(req, res) {
       role: admin.role,
       type: 'admin',
       jurisdiction_name: admin.jurisdiction_name,
+      lgd_jurisdiction_code: admin.lgd_jurisdiction_code,
       name: admin.name,
       email: admin.email,
     });
@@ -66,6 +68,7 @@ export async function adminLogin(req, res) {
         email: admin.email,
         role: admin.role,
         jurisdiction_name: admin.jurisdiction_name,
+        lgd_jurisdiction_code: admin.lgd_jurisdiction_code,
       },
     });
   } catch (err) {
@@ -83,6 +86,7 @@ export async function adminMe(req, res) {
           email: req.admin.email,
           role: req.admin.role,
           jurisdiction_name: req.admin.jurisdiction_name,
+          lgd_jurisdiction_code: req.admin.lgd_jurisdiction_code || null,
           is_active: true,
           parent_admin_id: null,
           created_at: null,
@@ -92,7 +96,7 @@ export async function adminMe(req, res) {
 
     const { data: admin, error } = await supabaseAdmin
       .from('admins')
-      .select('id,name,email,role,jurisdiction_name,is_active,parent_admin_id,created_at')
+      .select('id,name,email,role,jurisdiction_name,lgd_jurisdiction_code,is_active,parent_admin_id,created_at')
       .eq('id', req.admin.id)
       .single();
 

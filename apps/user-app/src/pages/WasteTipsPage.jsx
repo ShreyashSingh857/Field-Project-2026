@@ -5,11 +5,18 @@ import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import api from '../services/axiosInstance';
 
-const timeAgo = (d) => {
-  const ms = Date.now() - new Date(d).getTime();
-  const h = Math.floor(ms / 3600000);
-  if (h < 24) return `${Math.max(h, 1)}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+const formatAnnouncementTime = (value) => {
+  const ts = new Date(value).getTime();
+  if (!Number.isFinite(ts)) return '';
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
 export default function WasteTipsPage() {
@@ -38,6 +45,6 @@ export default function WasteTipsPage() {
     <main className="mx-auto max-w-2xl px-4 py-4 pb-24 space-y-3">
       {loading && [1,2,3].map((k)=><div key={k} className="clay-card animate-pulse p-4 h-28" />)}
       {!loading && cards.length===0 && <div className="py-14 text-center"><div className="mx-auto clay-icon mb-3 flex h-12 w-12 items-center justify-center" style={{ backgroundColor: 'var(--clay-card)', color: 'var(--clay-primary)' }}><Leaf className="h-6 w-6" /></div><p className="text-sm font-bold text-black">{t('wasteTips.empty')}</p><p className="mt-1 text-xs" style={{ color: 'var(--clay-muted)' }}>{t('wasteTips.emptySubtitle')}</p></div>}
-      {!loading && cards.map((a)=><article key={a.id} className="clay-card p-4 relative"><div className="flex items-start justify-between gap-2"><h3 className="text-sm font-bold text-black sm:text-base">{a.title}</h3>{a.is_pinned && <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ backgroundColor: '#FFF8E1', color: '#F57F17' }}>📌 {t('wasteTips.pinned')}</span>}</div><p className={`mt-2 text-xs leading-5 sm:text-sm ${open[a.id] ? '' : 'line-clamp-4'}`} style={{ color: 'var(--clay-muted)' }}>{a.content}</p>{a.long && <button type="button" onClick={()=>setOpen((s)=>({ ...s, [a.id]: !s[a.id] }))} className="mt-1 text-xs font-medium" style={{ color: 'var(--clay-primary)' }}>{open[a.id] ? t('wasteTips.showLess') : t('wasteTips.readMore')}</button>}<div className="mt-3 flex items-center justify-between text-[11px]" style={{ color: 'var(--clay-muted)' }}><span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{a.admin?.name || 'Admin'} · {a.admin?.role || 'Panchayat'}</span><span>{timeAgo(a.created_at)}</span></div></article>)}
+      {!loading && cards.map((a)=><article key={a.id} className="clay-card p-4 relative"><div className="flex items-start justify-between gap-2"><h3 className="min-w-0 text-sm font-bold text-black sm:text-base" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{a.title}</h3>{a.is_pinned && <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px]" style={{ backgroundColor: '#FFF8E1', color: '#F57F17' }}>📌 {t('wasteTips.pinned')}</span>}</div><p className={`mt-2 whitespace-pre-wrap text-xs leading-5 sm:text-sm ${open[a.id] ? '' : 'line-clamp-4'}`} style={{ color: 'var(--clay-muted)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{a.content}</p>{a.long && <button type="button" onClick={()=>setOpen((s)=>({ ...s, [a.id]: !s[a.id] }))} className="mt-1 text-xs font-medium" style={{ color: 'var(--clay-primary)' }}>{open[a.id] ? t('wasteTips.showLess') : t('wasteTips.readMore')}</button>}<div className="mt-3 flex items-center justify-between gap-2 text-[11px]" style={{ color: 'var(--clay-muted)' }}><span className="inline-flex min-w-0 items-center gap-1 truncate"><Building2 className="h-3 w-3 shrink-0" />{a.admin?.name || 'Admin'} · {a.admin?.role || 'Panchayat'}</span><span className="shrink-0">{formatAnnouncementTime(a.created_at)}</span></div></article>)}
     </main></div></div>;
 }

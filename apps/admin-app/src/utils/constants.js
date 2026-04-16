@@ -27,7 +27,7 @@ export const ADMIN_ROLES = {
     zilla_parishad: 'Zilla Parishad',
     block_samiti: 'Block Samiti',
     gram_panchayat: 'Gram Panchayat',
-    panchayat_admin: 'Panchayat Admin',
+    ward_member: 'Ward Member',
 };
 
 // Issue Status
@@ -53,7 +53,7 @@ export const ROLE_LABELS = {
     zilla_parishad: 'Zilla Parishad',
     block_samiti: 'Block Samiti',
     gram_panchayat: 'Gram Panchayat',
-    panchayat_admin: 'Panchayat Admin',
+    ward_member: 'Ward Member',
 };
 
 export const TASK_TYPE_LABELS = {
@@ -92,7 +92,7 @@ export const FILL_STATUS_COLOR = {
 export const CHILD_ROLE = {
     zilla_parishad: 'block_samiti',
     block_samiti: 'gram_panchayat',
-    gram_panchayat: 'panchayat_admin',
+    gram_panchayat: 'ward_member',
 };
 
 export const formatDate = (iso) => {
@@ -126,4 +126,31 @@ export const DATE_FORMAT_OPTIONS = {
         month: 'short',
         day: 'numeric',
     },
+};
+
+export const DEMO_CREDENTIALS = {
+  zilla_parishad: {
+    email:    'zillaparishad@demo.gramwaste.local',
+    password: 'Demo@123456',
+    label:    'Zilla Parishad (District)',
+    color:    '#880E4F',
+  },
+  block_samiti: {
+    email:    'blocksamiti@demo.gramwaste.local',
+    password: 'Demo@123456',
+    label:    'Block Samiti (Block)',
+    color:    '#F57F17',
+  },
+  gram_panchayat: {
+    email:    'grampanchayat@demo.gramwaste.local',
+    password: 'Demo@123456',
+    label:    'Gram Panchayat (Village)',
+    color:    '#1565C0',
+  },
+  ward_member: {
+    email:    'wardmember@demo.gramwaste.local',
+    password: 'Demo@123456',
+    label:    'Ward Member (Ward)',
+    color:    '#2E7D32',
+  },
 };

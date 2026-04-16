@@ -61,13 +61,13 @@ function Reports() {
 
             const { startDate, endDate } = getDateRange();
 
-            if (role === 'panchayat_admin') {
-                // Fetch data for panchayat_admin
+            if (role === 'ward_member') {
+                // Fetch data for ward_member
                 const [taskData, binData, workerData, issueData] = await Promise.all([
-                    getTaskCompletionByDay(startDate, endDate, adminId),
-                    getBinFillHistory(startDate, endDate),
-                    getWorkerPerformance(startDate, endDate, adminId),
-                    getIssueResolutionStats(startDate, endDate, adminId),
+                    getTaskCompletionByDay(role, startDate, endDate, adminId),
+                    getBinFillHistory(role, startDate, endDate),
+                    getWorkerPerformance(role, startDate, endDate, adminId),
+                    getIssueResolutionStats(role, startDate, endDate, adminId),
                 ]);
 
                 setTaskCompletionData(taskData);
@@ -81,8 +81,8 @@ function Reports() {
             } else if (['gram_panchayat', 'block_samiti', 'zilla_parishad'].includes(role)) {
                 // Fetch data for higher roles
                 const [aggregateData, binDistribution] = await Promise.all([
-                    getAggregatePerformanceByPanchayat(startDate, endDate),
-                    getBinStatusDistribution(),
+                    getAggregatePerformanceByPanchayat(role, startDate, endDate),
+                    getBinStatusDistribution(role),
                 ]);
 
                 setPanchayatPerformance(aggregateData);
@@ -175,8 +175,8 @@ function Reports() {
                 </div>
             </div>
 
-            {/* For panchayat_admin */}
-            {role === 'panchayat_admin' && (
+            {/* For ward_member */}
+            {role === 'ward_member' && (
                 <>
                     {/* Task Completion Chart */}
                     <div className="admin-panel">

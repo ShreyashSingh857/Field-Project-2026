@@ -5,6 +5,7 @@ import { selectRole, selectAdminId } from '../features/auth/authSlice';
 import { useToast, Toast } from '../utils/useToast';
 import { createSubAdminThunk, deactivateSubAdminThunk, fetchSubAdminsThunk, selectHierarchyAdmins } from '../features/hierarchy/hierarchySlice';
 import { ROLE_LABELS, CHILD_ROLE } from '../utils/constants';
+import api from '../services/axiosInstance';
 
 function HierarchyManagement() {
     const dispatch = useDispatch();
@@ -18,17 +19,63 @@ function HierarchyManagement() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [successCredentials, setSuccessCredentials] = useState(null);
+    const [childJurisdictionOptions, setChildJurisdictionOptions] = useState([]);
+    const [childJurisdictionLabel, setChildJurisdictionLabel] = useState('Block');
+    const [optionsLoading, setOptionsLoading] = useState(false);
+    const [optionsError, setOptionsError] = useState(null);
 
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         password: '',
         jurisdiction_name: '',
+        lgd_jurisdiction_code: '',
     });
 
     useEffect(() => {
         loadAdmins();
     }, [adminId]);
+
+    useEffect(() => {
+        if (!showModal) return;
+        loadChildJurisdictionOptions();
+    }, [showModal, role, adminId]);
+
+    const loadChildJurisdictionOptions = async () => {
+        try {
+            setOptionsLoading(true);
+            setOptionsError(null);
+            const { data } = await api.get('/admin/child-jurisdiction-options');
+            setChildJurisdictionLabel(data?.childLabel || (role === 'block_samiti' ? 'Gram Panchayat' : 'Block'));
+            const primary = (data?.options || []).map((item) => ({
+                name: item.name || item.label || item.jurisdiction_name || 'Unnamed',
+                lgd_code: String(item.lgd_code || item.census_code || ''),
+            })).filter((item) => item.name);
+            if (primary.length > 0) {
+                setChildJurisdictionOptions(Array.from(new Map(primary.map((b) => [b.name, b])).values()));
+                return;
+            }
+
+            const { data: villageData } = await api.get('/admin/villages');
+            const villages = villageData?.villages || [];
+            const names = role === 'zilla_parishad'
+                ? villages.map((v) => v.block_name)
+                : role === 'block_samiti'
+                    ? villages.map((v) => v.gram_panchayat_name)
+                    : [];
+            const fallback = Array.from(new Set(names.map((n) => String(n || '').trim()).filter(Boolean)))
+                .map((name) => ({ name, lgd_code: name }))
+                .sort((a, b) => a.name.localeCompare(b.name));
+            setChildJurisdictionOptions(fallback);
+            setOptionsError(fallback.length ? null : 'No child jurisdictions found for this admin');
+        } catch (_err) {
+            setChildJurisdictionOptions([]);
+            setChildJurisdictionLabel(role === 'block_samiti' ? 'Gram Panchayat' : 'Block');
+            setOptionsError('Failed to load jurisdiction list');
+        } finally {
+            setOptionsLoading(false);
+        }
+    };
 
     const loadAdmins = async () => {
         try {
@@ -50,7 +97,7 @@ function HierarchyManagement() {
     const getNewRoleForCreation = () => {
         if (role === 'zilla_parishad') return 'block_samiti';
         if (role === 'block_samiti') return 'gram_panchayat';
-        if (role === 'gram_panchayat') return 'panchayat_admin';
+        if (role === 'gram_panchayat') return 'ward_member';
         return null;
     };
 
@@ -82,6 +129,7 @@ function HierarchyManagement() {
                                 password: formData.password,
                                 role: newRoleForCreation,
                                 jurisdiction_name: formData.jurisdiction_name,
+                                lgd_jurisdiction_code: formData.lgd_jurisdiction_code || null,
                             },
                             adminId,
                             adminRole: role,
@@ -99,6 +147,7 @@ function HierarchyManagement() {
                 email: '',
                 password: '',
                 jurisdiction_name: '',
+                lgd_jurisdiction_code: '',
             });
 
             await loadAdmins();
@@ -165,6 +214,7 @@ function HierarchyManagement() {
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Jurisdiction</th>
+                                <th>LGD Code</th>
                                 <th>Created At</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -179,6 +229,9 @@ function HierarchyManagement() {
                                     </td>
                                     <td>{formatRoleLabel(admin.role)}</td>
                                     <td>{admin.jurisdiction_name}</td>
+                                    <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
+                                        {admin.lgd_jurisdiction_code || '—'}
+                                    </td>
                                     <td style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>
                                         {new Date(admin.created_at).toLocaleDateString('en-IN')}
                                     </td>
@@ -355,17 +408,63 @@ function HierarchyManagement() {
                                     </div>
 
                                     <div className="admin-form-group">
-                                        <label className="admin-form-label required">Jurisdiction Name</label>
+                                        <label className="admin-form-label required">{childJurisdictionLabel} Name</label>
+                                        {childJurisdictionOptions.length > 0 ? (
+                                            <select
+                                                className="admin-form-select"
+                                                value={formData.lgd_jurisdiction_code}
+                                                onChange={(e) => {
+                                                    const opt = childJurisdictionOptions.find((o) => String(o.lgd_code) === e.target.value);
+                                                    setFormData({
+                                                        ...formData,
+                                                        lgd_jurisdiction_code: e.target.value,
+                                                        jurisdiction_name: opt?.name || formData.jurisdiction_name,
+                                                    });
+                                                }}
+                                                required
+                                                disabled={optionsLoading}
+                                            >
+                                                <option value="">{optionsLoading ? `Loading ${childJurisdictionLabel.toLowerCase()}s...` : `Select a ${childJurisdictionLabel.toLowerCase()} from your list`}</option>
+                                                {childJurisdictionOptions.map((opt) => (
+                                                    <option key={opt.lgd_code || opt.name} value={opt.lgd_code || opt.name}>
+                                                        {opt.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                className="admin-form-input"
+                                                placeholder={`Enter ${childJurisdictionLabel.toLowerCase()} name manually`}
+                                                value={formData.jurisdiction_name}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    jurisdiction_name: e.target.value,
+                                                    lgd_jurisdiction_code: '',
+                                                })}
+                                                required
+                                            />
+                                        )}
+                                        {optionsError && (
+                                            <div style={{ fontSize: '11px', color: '#A32D2D', marginTop: '4px' }}>
+                                                {optionsError}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label">LGD Code (optional)</label>
                                         <input
                                             type="text"
                                             className="admin-form-input"
-                                            placeholder="e.g. North Block, Gokul Nagar"
-                                            value={formData.jurisdiction_name}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, jurisdiction_name: e.target.value })
-                                            }
-                                            required
+                                            placeholder={`LGD / census code for selected ${childJurisdictionLabel.toLowerCase()}`}
+                                            value={formData.lgd_jurisdiction_code}
+                                            onChange={(e) => setFormData({ ...formData, lgd_jurisdiction_code: e.target.value })}
+                                            readOnly={childJurisdictionOptions.length > 0}
                                         />
+                                        <div style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '4px' }}>
+                                            Find LGD codes at lgdirectory.nic.in → Local Body → Maharashtra
+                                        </div>
                                     </div>
 
                                     <div className="admin-modal-footer">

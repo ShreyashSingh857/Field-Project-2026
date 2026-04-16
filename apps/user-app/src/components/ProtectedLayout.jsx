@@ -3,6 +3,7 @@ import { MessageCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toggleChatbot } from '../features/chatbot/chatbotSlice';
 import Chatbot from './Chatbot';
+import NotificationCenter from './NotificationCenter';
 
 export default function ProtectedLayout({ children }) {
   const dispatch = useDispatch();
@@ -11,6 +12,7 @@ export default function ProtectedLayout({ children }) {
   return (
     <>
       {children}
+      <NotificationCenter />
 
       {/* Floating Chatbot FAB — persists across all protected pages */}
       <button

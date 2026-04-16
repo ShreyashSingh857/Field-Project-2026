@@ -3,7 +3,7 @@
 > **App:** `apps/user-app/` | **Framework:** React 19 + Vite | **State:** Redux Toolkit
 > **Auth:** Supabase Auth (replace existing Firebase config) | **Maps:** Leaflet + OpenStreetMap
 > **Languages:** English, Hindi, Marathi (i18n already configured)
-> **UI Style:** Claymorphism — follow `apps/GlobalResources/UI_DESIGN_SYSTEM.md` strictly for every page.
+> **UI Style:** Claymorphism — follow `DOCS/GlobalResources/UI_DESIGN_SYSTEM.md` strictly for every page.
 
 ---
 
