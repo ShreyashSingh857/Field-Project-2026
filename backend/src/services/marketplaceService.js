@@ -18,9 +18,9 @@ class MarketplaceService {
          user_id, village_id, district, status, created_at, expires_at,
          users(name, phone), villages(name, location_lat, location_lng)`
       )
-      .eq('status', 'pending')
+      .in('status', ['pending', 'flagged', 'approved'])
       .eq('district', districtName)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return listings || [];
@@ -161,11 +161,12 @@ class MarketplaceService {
       .from('users')
       .select('village_id, villages(district)')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (userErr) throw userErr;
+    if (userErr && userErr.code !== 'PGRST116') throw userErr;
 
-    const district = user?.villages?.[0]?.district || null;
+    const district = user?.villages?.[0]?.district || listingData.district || null;
+    const villageId = user?.village_id || listingData.village_id || null;
 
     // Create listing
     const { data: listing, error } = await supabaseAdmin
@@ -177,7 +178,7 @@ class MarketplaceService {
         price: listingData.price,
         photo_url: listingData.photo_url, // Required
         contact_number: listingData.contact_number,
-        village_id: user.village_id,
+        village_id: villageId,
         district,
         status: 'pending', // Start as pending
         ai_validation_status: 'pending', // Awaiting AI validation
@@ -447,7 +448,7 @@ class MarketplaceService {
     // Archive all active listings by this seller
     await supabaseAdmin
       .from('marketplace_listings')
-      .update({ status: 'archived', moderation_notes: 'Seller banned' })
+      .update({ status: 'deleted', moderation_notes: 'Seller banned' })
       .eq('user_id', userId)
       .eq('status', 'approved');
 
@@ -567,7 +568,7 @@ class MarketplaceService {
    * Update AI validation result for a listing
    */
   static async updateAIValidationResult(listingId, status, notes = null) {
-    const validStatuses = ['pending', 'passed', 'failed', 'skipped'];
+    const validStatuses = ['pending', 'passed', 'failed'];
     if (!validStatuses.includes(status)) {
       throw new Error(`Invalid AI validation status: ${status}`);
     }

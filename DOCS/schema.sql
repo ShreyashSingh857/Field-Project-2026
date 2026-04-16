@@ -91,12 +91,22 @@ CREATE TABLE public.marketplace_listings (
   photo_url text,
   contact_number text NOT NULL,
   village_id uuid,
+  district text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'flagged'::text, 'deleted'::text])),
+  ai_validation_status text DEFAULT 'pending'::text CHECK (ai_validation_status = ANY (ARRAY['pending'::text, 'passed'::text, 'failed'::text])),
+  ai_validation_notes text,
+  ai_validation_at timestamp with time zone,
+  moderation_by uuid,
+  moderation_at timestamp with time zone,
+  moderation_notes text,
   is_active boolean NOT NULL DEFAULT true,
+  expires_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT marketplace_listings_pkey PRIMARY KEY (id),
   CONSTRAINT marketplace_listings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT marketplace_listings_village_id_fkey FOREIGN KEY (village_id) REFERENCES public.villages(id)
+  CONSTRAINT marketplace_listings_village_id_fkey FOREIGN KEY (village_id) REFERENCES public.villages(id),
+  CONSTRAINT marketplace_listings_moderation_by_fkey FOREIGN KEY (moderation_by) REFERENCES public.admins(id)
 );
 CREATE TABLE public.recycling_centers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

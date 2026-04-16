@@ -1,11 +1,14 @@
 // apps/user-app/src/pages/MarketplaceCreate.jsx
-import React, { useState } from 'react';
-import { Upload, AlertCircle, CheckCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Upload, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/axiosInstance';
 
 export default function MarketplaceCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -17,6 +20,35 @@ export default function MarketplaceCreate() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [aiValidating, setAiValidating] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    // If editing, load the listing
+    if (editId) {
+      loadListing(editId);
+    }
+  }, [editId]);
+
+  async function loadListing(id) {
+    try {
+      const res = await api.get(`/marketplace?mine=true`);
+      const listing = res.data.listings?.find(l => l.id === id);
+      if (listing) {
+        setFormData({
+          title: listing.title,
+          description: listing.description || '',
+          price: listing.price.toString(),
+          contact_number: listing.contact_number,
+        });
+        if (listing.photo_url) {
+          setPhotoPreview(listing.photo_url);
+        }
+      }
+    } catch (err) {
+      console.error('Load error:', err);
+    }
+  }
 
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0];
@@ -41,9 +73,15 @@ export default function MarketplaceCreate() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setAiValidating(false);
 
-    if (!formData.title || !formData.price || !formData.contact_number || !photo) {
-      setError('All fields including photo are required');
+    if (!formData.title || !formData.price || !formData.contact_number) {
+      setError('Title, price, and contact number are required');
+      return;
+    }
+
+    if (!photo && !photoPreview) {
+      setError('Photo is required');
       return;
     }
 
@@ -54,21 +92,35 @@ export default function MarketplaceCreate() {
 
     try {
       setLoading(true);
+      setAiValidating(true);
+      
       const form = new FormData();
       form.append('title', formData.title);
       form.append('description', formData.description);
       form.append('price', formData.price);
       form.append('contact_number', formData.contact_number);
-      form.append('photo', photo);
+      if (photo) {
+        form.append('photo', photo);
+      }
 
-      const res = await api.post('/marketplace', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      if (editId) {
+        await api.patch(`/marketplace/${editId}`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setSuccessMessage('Listing updated successfully.');
+      } else {
+        await api.post('/marketplace', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setSuccessMessage('Listing created successfully.');
+      }
 
       setSuccess(true);
-      setTimeout(() => navigate('/my-listings'), 2000);
+      setTimeout(() => navigate('/my-listings'), 3000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create listing');
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to create listing';
+      setError(errorMsg);
+      setAiValidating(false);
     } finally {
       setLoading(false);
     }
@@ -76,51 +128,86 @@ export default function MarketplaceCreate() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-          <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Listing Created!</h2>
-          <p className="text-gray-600 mb-2">Your listing is pending moderator approval.</p>
-          <p className="text-sm text-gray-500">You'll be notified once it's reviewed.</p>
-          <p className="text-xs text-blue-600 mt-4">Redirecting to your listings...</p>
+      <div className="min-h-screen text-black" style={{ backgroundColor: 'var(--clay-bg)' }}>
+        <div className="mx-auto max-w-md px-4 py-16">
+          <div className="clay-card p-8 text-center">
+          <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4 animate-bounce" />
+          <h2 className="text-xl font-bold text-black">Done</h2>
+          <p className="mt-2 text-sm text-black">{successMessage}</p>
+          <div className="space-y-2 text-sm text-gray-600 mb-4">
+            <p>✅ Photo verification completed</p>
+            <p>⏳ Awaiting moderator review</p>
+          </div>
+          <p className="text-xs" style={{ color: 'var(--clay-muted)' }}>
+            Check your notifications for updates. Redirecting to your listings...
+          </p>
         </div>
+      </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-8">
-        <h1 className="text-3xl font-bold mb-2">Create Marketplace Listing</h1>
-        <p className="text-gray-600 mb-6">Second-hand waste materials only. Image is required.</p>
+    <div className="min-h-screen text-black" style={{ backgroundColor: 'var(--clay-bg)' }}>
+      <div className="relative min-h-screen w-full" style={{ backgroundColor: 'var(--clay-bg)' }}>
+        <header className="clay-header sticky top-0 z-20 flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4">
+          <button type="button" onClick={() => navigate('/marketplace')} className="clay-btn-round inline-flex h-10 w-10 items-center justify-center text-black" aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="clay-icon flex h-11 w-11 items-center justify-center overflow-hidden" style={{ backgroundColor: '#fff' }}>
+              <img src="/Logo.png" alt="GramWaste Connect" className="h-9 w-9 object-contain" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-black sm:text-base">{editId ? 'Edit Listing' : 'Create Listing'}</p>
+              <p className="text-xs sm:text-sm" style={{ color: 'var(--clay-muted)' }}>AI verifies uploaded item images</p>
+            </div>
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-4 pb-24 sm:px-5 sm:py-5">
+          <section className="clay-card p-4 sm:p-5">
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <p className="text-red-800">{error}</p>
+          <div className="mb-4 rounded-xl border p-3" style={{ borderColor: '#FFCDD2', backgroundColor: '#FFEBEE' }}>
+            <div className="flex gap-2">
+            <AlertCircle className="h-5 w-5 shrink-0" style={{ color: '#B71C1C' }} />
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#B71C1C' }}>Error</p>
+              <p className="text-xs" style={{ color: '#B71C1C' }}>{error}</p>
+            </div>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Image Upload */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Photo * <span className="text-red-500">(Required)</span>
+            <label className="block text-sm font-semibold text-black mb-2">
+              Photo <span className="text-red-500">*</span>
+              <span className="text-xs font-normal ml-2" style={{ color: 'var(--clay-muted)' }}>
+                (AI will verify authenticity)
+              </span>
             </label>
             <div
-              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition"
+              className="rounded-xl border-2 border-dashed p-6 text-center"
+              style={{ borderColor: 'rgba(255,255,255,0.55)', backgroundColor: '#fff' }}
               onClick={() => document.getElementById('photoInput')?.click()}
             >
               {photoPreview ? (
                 <div>
-                  <img src={photoPreview} alt="Preview" className="max-h-48 mx-auto rounded" />
-                  <p className="text-sm text-gray-600 mt-2">Click to change photo</p>
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="mx-auto max-h-48 max-w-full rounded-xl"
+                  />
+                  <p className="mt-2 text-xs" style={{ color: 'var(--clay-muted)' }}>Click to change photo</p>
                 </div>
               ) : (
                 <div>
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="font-semibold text-gray-700">Click to upload photo</p>
-                  <p className="text-sm text-gray-500">Max 5MB, image only</p>
+                  <Upload className="mx-auto mb-2 h-10 w-10" style={{ color: 'var(--clay-primary)' }} />
+                  <p className="text-sm font-semibold text-black">Click to upload photo</p>
+                  <p className="text-xs" style={{ color: 'var(--clay-muted)' }}>Max 5MB, image only</p>
                 </div>
               )}
               <input
@@ -135,77 +222,111 @@ export default function MarketplaceCreate() {
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Item Title *</label>
+            <label className="mb-1 block text-sm font-semibold text-black">
+              Item Title <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="e.g., Aluminum Cans (5kg batch)"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., Aluminum Cans Bundle (10 kg)"
+              className="w-full rounded-xl px-3 py-2 text-sm text-black outline-none"
+              style={{ backgroundColor: '#fff', border: '1.5px solid rgba(255,255,255,0.55)', boxShadow: 'var(--clay-shadow)' }}
+              maxLength="100"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+            <label className="mb-1 block text-sm font-semibold text-black">
+              Description
+            </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Condition, quantity, details..."
-              rows={3}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Describe condition, quantity, material details..."
+              rows={4}
+              className="w-full rounded-xl px-3 py-2 text-sm text-black outline-none"
+              style={{ backgroundColor: '#fff', border: '1.5px solid rgba(255,255,255,0.55)', boxShadow: 'var(--clay-shadow)' }}
+              maxLength="500"
             />
+            <p className="mt-1 text-xs" style={{ color: 'var(--clay-muted)' }}>
+              {formData.description.length}/500 characters
+            </p>
           </div>
 
           {/* Price */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Price (₹) *</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              placeholder="0.00"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label className="mb-1 block text-sm font-semibold text-black">
+              Price (₹) <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-sm font-semibold text-black">₹</span>
+              <input
+                type="number"
+                step="0.01"
+                min="1"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                placeholder="0.00"
+                className="w-full rounded-xl py-2 pl-7 pr-3 text-sm text-black outline-none"
+                style={{ backgroundColor: '#fff', border: '1.5px solid rgba(255,255,255,0.55)', boxShadow: 'var(--clay-shadow)' }}
+              />
+            </div>
           </div>
 
           {/* Contact */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Number *</label>
+            <label className="mb-1 block text-sm font-semibold text-black">
+              Contact Number <span className="text-red-500">*</span>
+            </label>
             <input
               type="tel"
               value={formData.contact_number}
               onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-              placeholder="10-digit phone number"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="10-digit mobile number"
+              maxLength="10"
+              className="w-full rounded-xl px-3 py-2 text-sm text-black outline-none"
+              style={{ backgroundColor: '#fff', border: '1.5px solid rgba(255,255,255,0.55)', boxShadow: 'var(--clay-shadow)' }}
             />
           </div>
 
+          {/* Info Box */}
+          <div className="rounded-xl border p-3" style={{ borderColor: '#C8E6C9', backgroundColor: '#F1F8E9' }}>
+            <p className="text-xs" style={{ color: 'var(--clay-primary)' }}>
+              <strong>AI Verification:</strong> Your photo will be checked by our AI 
+              to ensure it shows authentic waste materials.
+            </p>
+          </div>
+
           {/* Submit */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={() => navigate('/marketplace')}
-              className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              className="clay-nav-item flex-1 rounded-xl px-3 py-2 text-sm font-medium text-black"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, var(--clay-primary), var(--clay-secondary))' }}
             >
-              {loading ? 'Creating...' : 'Create Listing'}
+              {loading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  {aiValidating ? 'Verifying...' : 'Creating...'}
+                </>
+              ) : (
+                editId ? 'Update Listing' : 'Create Listing'
+              )}
             </button>
           </div>
         </form>
-
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>ℹ️ Note:</strong> Your listing will be pending moderator approval. It will auto-expire after 14 days if not reviewed.
-          </p>
-        </div>
+          </section>
+        </main>
       </div>
     </div>
   );

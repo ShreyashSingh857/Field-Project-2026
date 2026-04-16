@@ -4,15 +4,59 @@
  * Validates:
  * 1. Image contains second-hand/recyclable objects
  * 2. No published/censored content
- * 3. Image quality acceptable
+ * 3. No screenshot/document uploads
+ * 4. Logical price moderation based on item type and condition
  */
+
+const SCREENSHOT_DOC_LABELS = [
+  'screenshot', 'software', 'web page', 'text', 'document', 'invoice',
+  'receipt', 'form', 'id card', 'passport', 'certificate', 'menu', 'poster',
+];
+
+const CONDITION_WORN = [
+  'old', 'used', 'second hand', 'second-hand', 'scrap', 'broken', 'damaged',
+  'worn', 'rust', 'rusted', 'tear', 'torn', 'defect',
+];
+
+const CONDITION_GOOD = [
+  'new', 'brand new', 'unused', 'excellent', 'premium', 'good condition',
+];
+
+const PRICE_RULES = [
+  { name: 'furniture', keywords: ['chair', 'table', 'stool', 'sofa', 'couch', 'desk', 'bed', 'shelf'], max: 25000 },
+  { name: 'electronics', keywords: ['phone', 'mobile', 'laptop', 'tv', 'television', 'fridge', 'washing machine'], max: 60000 },
+  { name: 'metal_scrap', keywords: ['aluminum', 'steel', 'iron', 'copper', 'brass', 'metal', 'wire', 'cable'], max: 12000 },
+  { name: 'plastic_paper', keywords: ['plastic', 'paper', 'cardboard', 'bottle', 'can'], max: 6000 },
+];
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function hasAny(text, keywords) {
+  return keywords.some((k) => text.includes(k));
+}
+
+function inferRule(combinedText) {
+  return PRICE_RULES.find((rule) => hasAny(combinedText, rule.keywords)) || null;
+}
+
+function conditionMultiplier(combinedText) {
+  const worn = hasAny(combinedText, CONDITION_WORN);
+  const good = hasAny(combinedText, CONDITION_GOOD);
+
+  if (worn && !good) return 0.35;
+  if (worn) return 0.5;
+  if (good) return 1.1;
+  return 0.8;
+}
 
 class ImageValidationService {
   /**
    * Validate marketplace listing image using Google Vision API
    * Returns: { valid: boolean, reason?: string, confidence?: number }
    */
-  static async validateListingImage(imageUrl) {
+  static async validateListingImage(imageUrl, listingContext = {}) {
     if (!process.env.GOOGLE_VISION_API_KEY) {
       console.warn('Google Vision API key not configured, skipping AI validation');
       return { valid: true, reason: 'Validation skipped', confidence: 0 };
@@ -64,6 +108,9 @@ class ImageValidationService {
       // Check for second-hand/recyclable objects
       const labels = annotation.labelAnnotations || [];
       const objects = annotation.localizedObjectAnnotations || [];
+      const textAnnotations = annotation.textAnnotations || [];
+      const labelText = labels.map((l) => normalizeText(l.description));
+      const objectText = objects.map((o) => normalizeText(o.name));
 
       const secondHandLabels = [
         'plastic', 'aluminum', 'can', 'bottle', 'paper', 'cardboard', 'metal',
@@ -89,6 +136,22 @@ class ImageValidationService {
         return { valid: false, reason: 'Image contains prohibited item type' };
       }
 
+      // Screenshot/document moderation
+      const ocrText = normalizeText(textAnnotations?.[0]?.description || '');
+      const looksLikeScreenshotDoc =
+        labelText.some((l) => hasAny(l, SCREENSHOT_DOC_LABELS)) ||
+        objectText.some((o) => hasAny(o, SCREENSHOT_DOC_LABELS)) ||
+        (ocrText.length > 140 && objects.length === 0) ||
+        (ocrText.length > 220 && matchedLabels.length === 0);
+
+      if (looksLikeScreenshotDoc) {
+        return {
+          valid: false,
+          reason: 'Uploaded image looks like screenshot/document instead of product photo',
+          confidence: 0.95,
+        };
+      }
+
       if (matchedLabels.length === 0) {
         return {
           valid: false,
@@ -101,10 +164,36 @@ class ImageValidationService {
       const avgScore = matchedLabels.reduce((sum, l) => sum + l.score, 0) / matchedLabels.length;
 
       // Check for text overlays (published photos usually have watermarks)
-      const textAnnotations = annotation.textAnnotations || [];
       if (textAnnotations.length > 2) {
         // More than 2 text detections likely means watermark/published
         return { valid: false, reason: 'Image appears to be from a published source (watermark detected)' };
+      }
+
+      // Logical moderation: price vs item type and condition
+      const parsedPrice = Number.parseFloat(listingContext?.price);
+      if (Number.isFinite(parsedPrice) && parsedPrice > 0) {
+        const title = normalizeText(listingContext?.title);
+        const description = normalizeText(listingContext?.description);
+        const combined = [title, description, ...labelText, ...objectText].join(' ');
+        const rule = inferRule(combined);
+        const multiplier = conditionMultiplier(combined);
+
+        if (rule) {
+          const maxAllowed = Math.round(rule.max * multiplier);
+          if (parsedPrice > maxAllowed && parsedPrice > 1000) {
+            return {
+              valid: false,
+              reason: `Price seems unrealistic for detected ${rule.name} condition. Expected up to around Rs. ${maxAllowed}.`,
+              confidence: 0.92,
+            };
+          }
+        } else if (parsedPrice > 100000) {
+          return {
+            valid: false,
+            reason: 'Price appears unrealistic for marketplace resale item.',
+            confidence: 0.9,
+          };
+        }
       }
 
       return {

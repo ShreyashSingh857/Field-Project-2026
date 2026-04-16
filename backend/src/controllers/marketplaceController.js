@@ -1,5 +1,6 @@
 import MarketplaceService from '../services/marketplaceService.js';
 import ImageValidationService from '../services/imageValidationService.js';
+import MarketplaceNotificationService from '../services/marketplaceNotificationService.js';
 import { supabaseAdmin } from '../config/supabase.js';
 
 /**
@@ -13,7 +14,10 @@ export async function getListings(req, res) {
     const offset = (pageNum - 1) * limitNum;
 
     let listings;
-    if (mine === 'true' && req.user?.id) {
+    if (mine === 'true') {
+      if (!req.user?.id) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
       // User's own listings (all statuses)
       listings = await MarketplaceService.getUserListings(req.user.id);
       listings = listings.slice(offset, offset + limitNum);
@@ -43,10 +47,11 @@ export async function createListing(req, res) {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const { title, description, price, contact_number } = req.body;
+    const parsedPrice = Number.parseFloat(price);
     if (!title || !contact_number) {
       return res.status(400).json({ error: 'title and contact_number required' });
     }
-    if (price === undefined || price === null || Number.isNaN(price) || price < 0) {
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
       return res.status(400).json({ error: 'Valid price required' });
     }
 
@@ -75,16 +80,22 @@ export async function createListing(req, res) {
 
     // AI Validation: Check image contains second-hand items
     console.log(`[AI] Validating image: ${photoUrl}`);
-    const aiValidation = await ImageValidationService.validateListingImage(photoUrl);
+    const aiValidation = await ImageValidationService.validateListingImage(photoUrl, {
+      title: title.trim(),
+      description: description?.trim() || '',
+      price: parsedPrice,
+    });
     console.log(`[AI] Validation result:`, aiValidation);
 
     // Create listing
     const listing = await MarketplaceService.createListing(userId, {
       title: title.trim(),
       description: description?.trim() || null,
-      price: parseFloat(price),
+      price: parsedPrice,
       photo_url: photoUrl,
       contact_number: contact_number.trim(),
+      village_id: req.user?.user_metadata?.village_id || null,
+      district: req.user?.user_metadata?.district || null,
     });
 
     // Update with AI validation result
@@ -94,29 +105,136 @@ export async function createListing(req, res) {
       aiValidation.reason
     );
 
-    // If AI validation failed, still create listing but mark as rejected
+    // Send AI notification
+    await MarketplaceNotificationService.notifyAIValidation(userId, listing.id, {
+      ...aiValidation,
+      title: title.trim(),
+    });
+
+    // If AI validation failed, reject and notify
     if (!aiValidation.valid) {
-      await MarketplaceService.rejectListing(
+      const rejected = await MarketplaceService.rejectListing(
         listing.id,
         null,
-        `AI Image Validation: ${aiValidation.reason}. Listing auto-rejected.`
+        `Auto-rejected: ${aiValidation.reason}. Please upload a clear photo of second-hand waste items.`
+      );
+
+      // Notify rejection
+      await MarketplaceNotificationService.notifyRejection(
+        userId,
+        listing.id,
+        title,
+        aiValidation.reason
       );
 
       return res.status(201).json({
-        listing: updated,
-        message: `Listing created but rejected by AI validation: ${aiValidation.reason}. Please upload a clear photo of second-hand waste items.`,
+        listing: rejected,
+        message: `Listing submitted but validation failed: ${aiValidation.reason}. Please try with a different photo.`,
         aiValidation,
       });
     }
 
     res.status(201).json({
       listing: updated,
-      message: 'Listing created successfully, pending moderator approval',
+      message: 'Listing created successfully! Passed AI validation. Now pending moderator approval.',
       aiValidation,
     });
   } catch (err) {
     console.error('Create listing error:', err.message);
     res.status(400).json({ error: err.message });
+  }
+}
+
+/**
+ * User: Update their own pending listing
+ */
+export async function updateListing(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+    const { title, description, price, contact_number } = req.body;
+    const updates = {};
+    let aiValidation = null;
+    let existingForModeration = null;
+
+    if (title !== undefined) updates.title = String(title).trim();
+    if (description !== undefined) updates.description = String(description).trim() || null;
+    if (contact_number !== undefined) updates.contact_number = String(contact_number).trim();
+    if (price !== undefined) {
+      const parsedPrice = Number.parseFloat(price);
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ error: 'Valid price required' });
+      }
+      updates.price = parsedPrice;
+    }
+
+    if (req.file) {
+      const { data: listingSnapshot } = await supabaseAdmin
+        .from('marketplace_listings')
+        .select('user_id,title,description,price')
+        .eq('id', id)
+        .maybeSingle();
+      if (listingSnapshot?.user_id === userId) {
+        existingForModeration = listingSnapshot;
+      }
+
+      const ext = req.file.mimetype.split('/')[1] || 'jpg';
+      const fileName = `listings/${userId}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabaseAdmin.storage
+        .from('marketplace-photos')
+        .upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
+
+      if (uploadErr) {
+        return res.status(400).json({ error: 'Failed to upload photo' });
+      }
+
+      updates.photo_url = supabaseAdmin.storage
+        .from('marketplace-photos')
+        .getPublicUrl(fileName).data.publicUrl;
+
+      aiValidation = await ImageValidationService.validateListingImage(updates.photo_url, {
+        title: updates.title || title || existingForModeration?.title || '',
+        description: updates.description || description || existingForModeration?.description || '',
+        price: updates.price ?? existingForModeration?.price,
+      });
+    }
+
+    const updated = await MarketplaceService.updateListing(id, userId, updates);
+
+    if (aiValidation) {
+      await MarketplaceService.updateAIValidationResult(
+        id,
+        aiValidation.valid ? 'passed' : 'failed',
+        aiValidation.reason
+      );
+
+      await MarketplaceNotificationService.notifyAIValidation(userId, id, {
+        ...aiValidation,
+        title: updates.title || updated.title,
+      });
+
+      if (!aiValidation.valid) {
+        const rejected = await MarketplaceService.rejectListing(
+          id,
+          null,
+          `Auto-rejected after edit: ${aiValidation.reason}`
+        );
+        await MarketplaceNotificationService.notifyRejection(
+          userId,
+          id,
+          updates.title || updated.title,
+          aiValidation.reason
+        );
+        return res.json({ listing: rejected, message: 'Updated but failed AI validation' });
+      }
+    }
+
+    return res.json({ listing: updated, message: 'Listing updated' });
+  } catch (err) {
+    console.error('Update listing error:', err.message);
+    return res.status(400).json({ error: err.message });
   }
 }
 
@@ -169,8 +287,26 @@ export async function approveListing(req, res) {
     const { id } = req.params;
     const { notes } = req.body;
 
+    // Get listing to find user_id
+    const { data: listing } = await supabaseAdmin
+      .from('marketplace_listings')
+      .select('user_id, title')
+      .eq('id', id)
+      .single();
+
     const updated = await MarketplaceService.approveListing(id, adminId, notes);
-    res.json({ listing: updated, message: 'Listing approved' });
+    
+    // Notify user
+    if (listing?.user_id) {
+      await MarketplaceNotificationService.notifyApproval(
+        listing.user_id,
+        id,
+        listing.title,
+        notes
+      );
+    }
+
+    res.json({ listing: updated, message: 'Listing approved and user notified' });
   } catch (err) {
     console.error('Approve listing error:', err.message);
     res.status(400).json({ error: err.message });
@@ -190,8 +326,26 @@ export async function rejectListing(req, res) {
 
     if (!reason) return res.status(400).json({ error: 'Rejection reason required' });
 
+    // Get listing to find user_id
+    const { data: listing } = await supabaseAdmin
+      .from('marketplace_listings')
+      .select('user_id, title')
+      .eq('id', id)
+      .single();
+
     const updated = await MarketplaceService.rejectListing(id, adminId, reason);
-    res.json({ listing: updated, message: 'Listing rejected' });
+    
+    // Notify user
+    if (listing?.user_id) {
+      await MarketplaceNotificationService.notifyRejection(
+        listing.user_id,
+        id,
+        listing.title,
+        reason
+      );
+    }
+
+    res.json({ listing: updated, message: 'Listing rejected and user notified' });
   } catch (err) {
     console.error('Reject listing error:', err.message);
     res.status(400).json({ error: err.message });

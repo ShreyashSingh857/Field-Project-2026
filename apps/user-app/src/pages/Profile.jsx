@@ -79,7 +79,7 @@ export default function Profile() {
 					</section>
 
 					<section className="clay-card p-3 space-y-2">
-						<button onClick={() => navigate('/marketplace?mine=true')} className="clay-nav-item flex w-full items-center justify-between px-3 py-2 text-sm text-black"><span className="inline-flex items-center gap-2"><ShoppingBag className="h-4 w-4" />{t('profile.myListings', { defaultValue: 'My Listings' })}</span><ChevronRight className="h-4 w-4" /></button>
+						<button onClick={() => navigate('/my-listings')} className="clay-nav-item flex w-full items-center justify-between px-3 py-2 text-sm text-black"><span className="inline-flex items-center gap-2"><ShoppingBag className="h-4 w-4" />{t('profile.myListings', { defaultValue: 'My Listings' })}</span><ChevronRight className="h-4 w-4" /></button>
 						<button onClick={() => navigate('/report?mine=true')} className="clay-nav-item flex w-full items-center justify-between px-3 py-2 text-sm text-black"><span className="inline-flex items-center gap-2"><ClipboardList className="h-4 w-4" />{t('profile.myReports', { defaultValue: 'My Reports' })}</span><ChevronRight className="h-4 w-4" /></button>
 					</section>
 

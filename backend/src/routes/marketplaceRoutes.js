@@ -6,6 +6,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import {
   getListings,
   createListing,
+  updateListing,
   deleteListing,
   getPendingModerationQueue,
   approveListing,
@@ -23,8 +24,9 @@ const upload = multer({
 });
 
 // User endpoints
-router.get('/', getListings);
+router.get('/', verifySupabaseAuth, getListings);
 router.post('/', verifySupabaseAuth, upload.single('photo'), createListing);
+router.patch('/:id', verifySupabaseAuth, upload.single('photo'), updateListing);
 router.delete('/:id', verifySupabaseAuth, deleteListing);
 
 // Admin moderation endpoints

@@ -48,14 +48,32 @@ export async function getNotifications(req, res) {
 		const items = [];
 		if (actor.type === 'user') {
 			const { villageId } = await resolveUserVillage(actor.user);
-			const [{ data: announcements }, { data: bins }, { data: issues }] = await Promise.all([
+			const [{ data: announcements }, { data: bins }, { data: issues }, { data: listings }] = await Promise.all([
 				supabaseAdmin.from('announcements').select('id,title,content,created_at,is_pinned,target_village_id').eq('is_active', true).or(villageId ? `target_village_id.eq.${villageId},target_village_id.is.null` : 'target_village_id.is.null').order('is_pinned', { ascending: false }).order('created_at', { ascending: false }).limit(10),
 				supabaseAdmin.from('bins').select('id,label,fill_level,fill_status,location_address,village_id,updated_at').eq('is_active', true).gte('fill_level', 80).order('fill_level', { ascending: false }).limit(10),
 				supabaseAdmin.from('issue_reports').select('id,description,status,created_at,updated_at,location_address').eq('user_id', actor.user.id).order('updated_at', { ascending: false }).limit(10),
+				supabaseAdmin.from('marketplace_listings').select('id,title,status,ai_validation_status,ai_validation_notes,moderation_notes,created_at,updated_at,ai_validation_at,moderation_at').eq('user_id', actor.user.id).order('updated_at', { ascending: false }).limit(10),
 			]);
 			(announcements || []).forEach((a) => items.push(buildItem('announcement', a.title, a.content, '/announcements', a.id, a.created_at, { severity: a.is_pinned ? 'high' : 'info' })));
 			(bins || []).forEach((b) => items.push(buildItem('bin', `${b.label} is getting full`, `Fill level is ${b.fill_level}%`, '/bins', b.id, b.updated_at || b.created_at, { severity: b.fill_level >= 95 ? 'high' : 'warning' })));
 			(issues || []).forEach((i) => items.push(buildItem('issue', `Issue ${i.status}`, i.description, '/report', i.id, i.updated_at || i.created_at, { severity: i.status === 'rejected' ? 'high' : 'info' })));
+			(listings || []).forEach((m) => {
+				if (m.ai_validation_status === 'failed') {
+					items.push(buildItem('marketplace', 'Marketplace validation failed', m.ai_validation_notes || 'AI validation failed. Please upload a clearer image.', '/my-listings', `${m.id}:ai_failed`, m.ai_validation_at || m.updated_at || m.created_at, { severity: 'high' }));
+					return;
+				}
+				if (m.status === 'approved') {
+					items.push(buildItem('marketplace', 'Listing approved', `${m.title} is now live in marketplace.`, '/my-listings', `${m.id}:approved`, m.moderation_at || m.updated_at || m.created_at, { severity: 'info' }));
+					return;
+				}
+				if (m.status === 'rejected') {
+					items.push(buildItem('marketplace', 'Listing rejected', m.moderation_notes || 'Your listing was rejected. Please edit and submit again.', '/my-listings', `${m.id}:rejected`, m.moderation_at || m.updated_at || m.created_at, { severity: 'high' }));
+					return;
+				}
+				if (m.ai_validation_status === 'passed' && m.status === 'pending') {
+					items.push(buildItem('marketplace', 'Listing submitted', `${m.title} passed AI check and is awaiting moderator approval.`, '/my-listings', `${m.id}:pending`, m.ai_validation_at || m.updated_at || m.created_at, { severity: 'info' }));
+				}
+			});
 		}
 
 		if (actor.type === 'worker') {
