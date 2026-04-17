@@ -7,12 +7,18 @@
     "backend"
   ],
   "scripts": {
+    "predev:all": "node scripts/free-dev-ports.cjs",
+    "dev": "npm run dev:all",
+    "dev:all": "concurrently --kill-others-on-fail --names backend,user,admin,worker --prefix-colors cyan,green,magenta,yellow \"npm run dev:backend\" \"npm run dev:user\" \"npm run dev:admin\" \"npm run dev:worker\"",
     "dev:backend": "npm run dev --workspace=backend",
-    "dev:user": "npm run dev --workspace=user-app",
-    "dev:worker": "npm run dev --workspace=worker-app",
-    "dev:admin": "npm run dev --workspace=admin-app"
+    "dev:user": "npm run dev --workspace=user-app -- --port 5173",
+    "dev:worker": "npm run dev --workspace=worker-app -- --port 5175",
+    "dev:admin": "npm run dev --workspace=admin-app -- --port 5174"
   },
   "dependencies": {
     "i18next": "^25.10.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
