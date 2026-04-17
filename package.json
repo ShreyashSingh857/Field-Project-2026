@@ -13,12 +13,16 @@
     "dev:backend": "npm run dev --workspace=backend",
     "dev:user": "npm run dev --workspace=user-app -- --port 5173",
     "dev:worker": "npm run dev --workspace=worker-app -- --port 5175",
-    "dev:admin": "npm run dev --workspace=admin-app -- --port 5174"
+    "dev:admin": "npm run dev --workspace=admin-app -- --port 5174",
+    "test": "npm run test:backend",
+    "test:backend": "npm run test --workspace=backend",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "i18next": "^25.10.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "concurrently": "^9.2.1"
   }
 }

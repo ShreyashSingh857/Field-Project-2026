@@ -2,6 +2,8 @@ import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase.js';
 import { calculateTaskDueAt } from '../services/slaService.js';
 import { getVillageIdsForAdmin } from '../utils/adminHelpers.js';
+import { createNotification } from '../services/notificationService.js';
+import { sendWhatsAppSafely } from '../services/whatsappService.js';
 import {
 	completeTaskById,
 	getTaskById,
@@ -22,6 +24,17 @@ function getWorkerContext(req) {
 	const workerId = req.worker?.id || userMetadata.worker_id || null;
 	const villageId = req.worker?.village_id || userMetadata.village_id || null;
 	return { workerId, villageId };
+}
+
+async function getWorkerContact(workerId) {
+	if (!workerId) return null;
+	const { data, error } = await supabaseAdmin
+		.from('workers')
+		.select('id,name,phone')
+		.eq('id', workerId)
+		.maybeSingle();
+	if (error) throw error;
+	return data || null;
 }
 
 async function uploadTaskProof(file, taskId) {
@@ -111,6 +124,18 @@ export async function startTask(req, res) {
 			changedBy: req.user?.id || workerId,
 		});
 
+		if (existingTask.created_by_admin_id) {
+			await createNotification({
+				actorType: 'admin',
+				actorId: existingTask.created_by_admin_id,
+				kind: 'task_started',
+				title: 'Task started',
+				body: `${existingTask.title || 'Task'} has been started by worker.`,
+				link: '/tasks',
+				data: { task_id: req.params.id },
+			});
+		}
+
 		return res.json(task);
 	} catch (error) {
 		return res.status(500).json({ error: error.message || 'Failed to start task' });
@@ -164,6 +189,18 @@ export async function completeTask(req, res) {
 			changedBy: req.user?.id || workerId,
 		});
 
+		if (existingTask.created_by_admin_id) {
+			await createNotification({
+				actorType: 'admin',
+				actorId: existingTask.created_by_admin_id,
+				kind: 'task_completed',
+				title: 'Task completed',
+				body: `${existingTask.title || 'Task'} has been completed by worker.`,
+				link: '/tasks',
+				data: { task_id: req.params.id },
+			});
+		}
+
 		return res.json(task);
 	} catch (error) {
 		return res.status(500).json({ error: error.message || 'Failed to complete task' });
@@ -214,6 +251,26 @@ export async function createTaskByAdmin(req, res) {
 
 		const { data, error } = await supabaseAdmin.from('tasks').insert(payload).select('*').single();
 		if (error) throw error;
+		if (assignedWorkerId) {
+			await createNotification({
+				actorType: 'worker',
+				actorId: assignedWorkerId,
+				kind: 'task_assigned',
+				title: 'New task assigned',
+				body: payload.title || 'You have a newly assigned task.',
+				link: `/tasks/${data.id}`,
+				data: { task_id: data.id },
+			});
+
+			const worker = await getWorkerContact(assignedWorkerId);
+			if (worker?.phone) {
+				await sendWhatsAppSafely({
+					to: worker.phone,
+					body: `New task assigned: ${payload.title || 'Task'}. Task ID: ${data.id}. Please check your worker app.`,
+					tag: 'task-assigned-alert',
+				});
+			}
+		}
 		if (sourceIssueId) {
 			await supabaseAdmin.from('issue_reports').update({ status: 'assigned', created_task_id: data.id, updated_at: new Date().toISOString() }).eq('id', sourceIssueId);
 		}
@@ -228,6 +285,14 @@ export async function updateTaskStatusByAdmin(req, res) {
 		const { status, assigned_worker_id } = req.body || {};
 		if (!status) return res.status(400).json({ error: 'status is required' });
 
+		const { data: existingTask, error: existingError } = await supabaseAdmin
+			.from('tasks')
+			.select('id,title,assigned_worker_id')
+			.eq('id', req.params.id)
+			.maybeSingle();
+		if (existingError) throw existingError;
+		if (!existingTask) return res.status(404).json({ error: 'Task not found' });
+
 		const updates = { status, updated_at: new Date().toISOString() };
 		if (assigned_worker_id !== undefined) {
 			updates.assigned_worker_id = assigned_worker_id;
@@ -240,6 +305,33 @@ export async function updateTaskStatusByAdmin(req, res) {
 			.select('*')
 			.single();
 		if (error) throw error;
+		if (data?.assigned_worker_id) {
+			await createNotification({
+				actorType: 'worker',
+				actorId: data.assigned_worker_id,
+				kind: 'task_status_update',
+				title: 'Task updated',
+				body: `${data.title || 'Task'} is now ${data.status}.`,
+				link: `/tasks/${data.id}`,
+				data: { task_id: data.id, status: data.status },
+			});
+		}
+
+		const didAssignNewWorker =
+			assigned_worker_id !== undefined &&
+			data?.assigned_worker_id &&
+			String(data.assigned_worker_id) !== String(existingTask.assigned_worker_id || '');
+
+		if (didAssignNewWorker) {
+			const worker = await getWorkerContact(data.assigned_worker_id);
+			if (worker?.phone) {
+				await sendWhatsAppSafely({
+					to: worker.phone,
+					body: `You have been assigned task ${data.id}: ${data.title || existingTask.title || 'Task'}. Current status: ${data.status}.`,
+					tag: 'task-reassigned-alert',
+				});
+			}
+		}
 		return res.json(data);
 	} catch (error) {
 		return res.status(500).json({ error: error.message || 'Failed to update task status' });

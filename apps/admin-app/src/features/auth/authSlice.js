@@ -61,9 +61,6 @@ const authSlice = createSlice({
                 state.loading = false;
                 state.admin = action.payload.admin;
                 localStorage.setItem('admin_user', JSON.stringify(action.payload.admin));
-                if (action.payload.token) {
-                  localStorage.setItem('admin_token', action.payload.token);
-                }
             })
             .addCase(loginAdmin.rejected, (state, action) => {
                 state.loading = false;
@@ -79,7 +76,7 @@ const authSlice = createSlice({
             })
             .addCase(initAdmin.rejected, (state, action) => {
                 state.loading = false;
-                state.error = action.payload;
+                state.error = null;
             });
     },
 });

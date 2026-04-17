@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "seed:demo": "node src/scripts/seedDemoAdmins.js",
     "seed:geo": "python3 scripts/seed_geo_boundaries.py",
-    "seed:geo:fast": "set SEED_FAST_MODE=1&& set SEED_SIMPLIFY_GEOMETRY=0&& set SEED_COMPUTE_CENTROID=0&& set SEED_UPDATE_DEMO_VILLAGE=0&& ..\\.venv\\Scripts\\python.exe scripts/seed_geo_boundaries.py",
-    "seed:geo:chunks": "..\\.venv\\Scripts\\python.exe scripts/seed_geo_chunks.py",
-    "reset:geo": "..\\.venv\\Scripts\\python.exe scripts/reset_geo_tables.py",
-    "seed:maharashtra": "set SEED_FAST_MODE=1&& set SEED_STATE_CODE=27&& ..\\.venv\\Scripts\\python.exe scripts/seed_maharashtra_metadata.py",
+    "seed:geo:fast": "cross-env SEED_FAST_MODE=1 SEED_SIMPLIFY_GEOMETRY=0 SEED_COMPUTE_CENTROID=0 SEED_UPDATE_DEMO_VILLAGE=0 python3 scripts/seed_geo_boundaries.py",
+    "seed:geo:chunks": "python3 scripts/seed_geo_chunks.py",
+    "reset:geo": "python3 scripts/reset_geo_tables.py",
+    "seed:maharashtra": "cross-env SEED_FAST_MODE=1 SEED_STATE_CODE=27 python3 scripts/seed_maharashtra_metadata.py",
     "upload:geo:supabase": "node scripts/upload_geo_to_supabase.js"
   },
   "dependencies": {
@@ -19,14 +21,22 @@
     "@google/generative-ai": "^0.22.0",
     "@supabase/supabase-js": "^2.48.0",
     "cors": "^2.8.5",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
     "multer": "^1.4.5-lts.1",
     "openai": "^6.32.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "swagger-ui-express": "^5.0.1",
+    "twilio": "^5.8.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.4",
+    "vitest": "^3.2.4"
   }
 }

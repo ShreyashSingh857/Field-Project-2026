@@ -6,6 +6,14 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { verifyWorkerJWT } from '../middleware/verifyWorkerJWT.js';
+import { validateBody } from '../middleware/validateRequest.js';
+import {
+  workerCreateSchema,
+  workerLoginSchema,
+  workerPasswordSchema,
+  workerStatusSchema,
+  workerUpdateSchema,
+} from '../validation/schemas.js';
 
 const router = Router();
 
@@ -58,9 +66,13 @@ function generateWorkerPassword() {
   return out;
 }
 
-router.post('/login', workerLogin);
+router.post('/login', validateBody(workerLoginSchema), workerLogin);
 router.get('/me', verifyWorkerJWT, workerMe);
-router.patch('/me/password', verifyWorkerJWT, async (req, res) => {
+router.post('/logout', (_req, res) => {
+  res.clearCookie('worker_token', { path: '/' });
+  return res.json({ ok: true });
+});
+router.patch('/me/password', verifyWorkerJWT, validateBody(workerPasswordSchema), async (req, res) => {
   try {
     const currentPassword = String(req.body?.current_password || '');
     const newPassword = String(req.body?.new_password || '');
@@ -154,7 +166,7 @@ router.get('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) 
   }
 });
 
-router.post('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.post('/', verifyAdminJWT, requireRole('ward_member'), validateBody(workerCreateSchema), async (req, res) => {
   try {
     const { name, phone, assigned_area, village_id, language, password } = req.body || {};
     const { data: me } = await supabaseAdmin.from('admins').select('id,name').eq('id', req.admin.id).maybeSingle();
@@ -191,7 +203,7 @@ router.post('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) =>
   }
 });
 
-router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), validateBody(workerUpdateSchema), async (req, res) => {
   try {
     const allowed = ['name', 'phone', 'assigned_area', 'language'];
     const updates = Object.fromEntries(
@@ -212,7 +224,7 @@ router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res
   }
 });
 
-router.patch('/:id/status', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.patch('/:id/status', verifyAdminJWT, requireRole('ward_member'), validateBody(workerStatusSchema), async (req, res) => {
   try {
     const { is_active } = req.body || {};
     const { data, error } = await supabaseAdmin

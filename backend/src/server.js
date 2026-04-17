@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { validateEnv } from './config/validateEnv.js';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -18,6 +20,8 @@ import workerRoutes from './routes/workerRoutes.js';
 import sensorRoutes from './routes/sensorRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import { buildOperationalSummary } from './services/reportingService.js';
+import { openApiSpec } from './config/openapi.js';
+import swaggerUi from 'swagger-ui-express';
 
 validateEnv();
 
@@ -37,6 +41,20 @@ const allowedOrigins = [
 // ── Security & parsing ──────────────────────────────────────
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'", ...allowedOrigins, process.env.SUPABASE_URL || ''].filter(Boolean),
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+      fontSrc: ["'self'", 'https:', 'data:'],
+    },
+  },
+}));
 
 // ── Rate limiting ───────────────────────────────────────────
 const generalLimiter = rateLimit({
@@ -74,6 +92,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/sensors', sensorRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 app.get('/api/reports', async (_req, res, next) => {
   try {
     const summary = await buildOperationalSummary();
@@ -96,6 +115,10 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err?.message || 'Internal server error' });
 });
 
-app.listen(port, () => {
-  console.log(`Backend running on http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Backend running on http://localhost:${port}`);
+  });
+}
+
+export default app;

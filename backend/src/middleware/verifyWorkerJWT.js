@@ -1,13 +1,14 @@
 import { verifyToken } from '../services/jwtService.js';
+import { getRequestToken } from '../utils/authToken.js';
 
 export function verifyWorkerJWT(req, res, next) {
   try {
-    const auth = req.headers.authorization || '';
-    if (!auth.startsWith('Bearer ')) {
+    const token = getRequestToken(req, 'worker_token');
+    if (!token) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = verifyToken(auth.slice(7));
+    const decoded = verifyToken(token);
     if (decoded?.type !== 'worker') {
       return res.status(403).json({ error: 'Forbidden' });
     }

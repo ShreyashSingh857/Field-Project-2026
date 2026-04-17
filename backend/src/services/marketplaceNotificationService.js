@@ -2,8 +2,7 @@
  * Marketplace Notification Service
  * Handles notifications for listing approval/rejection/AI validation
  */
-
-import { supabaseAdmin } from '../config/supabase.js';
+import { createNotification } from './notificationService.js';
 
 class MarketplaceNotificationService {
   /**
@@ -11,22 +10,15 @@ class MarketplaceNotificationService {
    */
   static async createNotification(userId, type, data) {
     try {
-      const { data: notification, error } = await supabaseAdmin
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          type: `marketplace_${type}`,
-          title: this.getTitle(type, data),
-          message: this.getMessage(type, data),
-          data: JSON.stringify(data),
-          read: false,
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return notification;
+      return await createNotification({
+        actorType: 'user',
+        actorId: userId,
+        kind: `marketplace_${type}`,
+        title: this.getTitle(type, data),
+        body: this.getMessage(type, data),
+        link: '/my-listings',
+        data,
+      });
     } catch (err) {
       console.error('Create notification error:', err);
       // Don't fail the listing operation if notification fails

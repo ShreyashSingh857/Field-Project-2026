@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import api from '../services/axiosInstance';
-
-const KEY = 'gwc-worker-seen-notifications';
+import { supabase } from '../services/supabaseClient';
 
 export default function NotificationCenter() {
 	const worker = useSelector((s) => s.auth.worker);
 	const [items, setItems] = useState([]);
 	const [open, setOpen] = useState(false);
 	const [toasts, setToasts] = useState([]);
-	const seen = useMemo(() => new Set(JSON.parse(localStorage.getItem(KEY) || '[]')), []);
 
 	useEffect(() => {
 		if (!worker?.id) return;
 		let mounted = true;
+		let channel = null;
 		const show = (item) => { if (Notification.permission === 'granted') new Notification(item.title, { body: item.body }); };
 		const load = async () => {
 			try {
@@ -22,20 +21,44 @@ export default function NotificationCenter() {
 				if (!mounted) return;
 				const next = (data.notifications || []).slice(0, 12);
 				setItems(next);
-				const newItems = next.filter((item) => !seen.has(item.id));
-				if (newItems.length) {
-					localStorage.setItem(KEY, JSON.stringify([...seen, ...newItems.map((item) => item.id)]));
-					setToasts((list) => [...list, ...newItems.slice(0, 3)].slice(-3));
-					newItems.slice(0, 3).forEach(show);
-				}
 			} catch (_e) {}
 		};
+
+		const handleRealtime = (payload) => {
+			if (payload?.new?.actor_id !== worker.id) return;
+			setToasts((list) => [...list, payload.new].slice(-3));
+			show(payload.new);
+			load();
+		};
+
 		load();
 		const id = setInterval(load, 60000);
-		return () => { mounted = false; clearInterval(id); };
-	}, [seen, worker?.id]);
+		if (supabase) {
+			channel = supabase
+				.channel(`worker-notifications-${worker.id}`)
+				.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'actor_type=eq.worker' }, handleRealtime)
+				.subscribe();
+		}
 
-	const unread = Math.max(0, items.length - seen.size);
+		return () => {
+			mounted = false;
+			clearInterval(id);
+			if (channel && supabase) supabase.removeChannel(channel);
+		};
+	}, [worker?.id]);
+
+	const unread = items.filter((item) => !item.read).length;
+
+	const openItem = async (item) => {
+		try {
+			if (!item.read) {
+				await api.patch(`/notifications/${item.id}/read`);
+				setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+			}
+		} catch (_e) {}
+		setOpen(false);
+		window.location.assign(item.link || '/');
+	};
 
 	return (
 		<>
@@ -48,7 +71,7 @@ export default function NotificationCenter() {
 					<div className="mt-2 w-80 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
 						<div className="flex items-center justify-between border-b px-4 py-3"><strong className="text-sm">Notifications</strong><button onClick={() => setOpen(false)}><X className="h-4 w-4" /></button></div>
 						<div className="max-h-96 overflow-y-auto">
-							{items.length === 0 ? <div className="p-4 text-sm text-gray-500">No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => { setOpen(false); window.location.assign(item.link || '/'); }} className="block w-full border-b px-4 py-3 text-left hover:bg-gray-50"><div className="text-xs font-bold uppercase tracking-wide text-emerald-600">{item.kind === 'task_assigned' ? 'Task assigned' : item.kind}</div><div className="text-sm font-semibold text-black">{item.title}</div><div className="mt-1 text-xs text-gray-600">{item.body}</div></button>)}
+							{items.length === 0 ? <div className="p-4 text-sm text-gray-500">No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => openItem(item)} className={`block w-full border-b px-4 py-3 text-left hover:bg-gray-50 ${item.read ? '' : 'bg-emerald-50/40'}`}><div className="text-xs font-bold uppercase tracking-wide text-emerald-600">{item.kind === 'task_assigned' ? 'Task assigned' : item.kind}</div><div className="text-sm font-semibold text-black">{item.title}</div><div className="mt-1 text-xs text-gray-600">{item.body}</div></button>)}
 						</div>
 					</div>
 				)}

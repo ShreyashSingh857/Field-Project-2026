@@ -11,16 +11,19 @@ import {
 import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
 import { verifyWorkerJWT } from '../middleware/verifyWorkerJWT.js';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
+import { validateBody } from '../middleware/validateRequest.js';
 import { verifyToken } from '../services/jwtService.js';
+import { getRequestToken } from '../utils/authToken.js';
+import { taskCreateSchema, taskStatusUpdateSchema } from '../validation/schemas.js';
 
 const router = Router();
 
 const verifyTaskReadAccess = async (req, res, next) => {
-	const auth = req.headers.authorization || '';
-	if (!auth.startsWith('Bearer ')) {
+  const token = getRequestToken(req);
+  if (!token) {
 		return res.status(401).json({ error: 'No token provided' });
 	}
-	const token = auth.slice(7);
+
 	try {
 		const decoded = verifyToken(token);
 		if (decoded?.type === 'admin') {
@@ -42,7 +45,7 @@ router.get('/:id', verifyTaskReadAccess, getTask);
 router.patch('/:id/start', verifyWorkerJWT, startTask);
 router.patch('/:id/complete', verifyWorkerJWT, completeTaskUpload, completeTask);
 
-router.post('/', verifyAdminJWT, createTaskByAdmin);
-router.patch('/:id/status', verifyAdminJWT, updateTaskStatusByAdmin);
+router.post('/', verifyAdminJWT, validateBody(taskCreateSchema), createTaskByAdmin);
+router.patch('/:id/status', verifyAdminJWT, validateBody(taskStatusUpdateSchema), updateTaskStatusByAdmin);
 
 export default router;

@@ -8,8 +8,7 @@ function App() {
   const admin = useSelector(selectAdmin);
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    if (token && !admin) {
+    if (!admin) {
       dispatch(initAdmin());
     }
   }, [admin, dispatch]);

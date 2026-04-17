@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase.js';
 import { signToken } from '../services/jwtService.js';
+import { buildAuthCookieOptions } from '../utils/cookieOptions.js';
 
 export async function workerLogin(req, res) {
   try {
@@ -38,6 +39,8 @@ export async function workerLogin(req, res) {
       created_by_admin_id: worker.created_by_admin_id,
       password_changed: worker.password_changed,
     });
+
+    res.cookie('worker_token', token, buildAuthCookieOptions());
 
     return res.json({
       token,

@@ -3,6 +3,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import { verifySupabaseAuth } from '../middleware/verifySupabaseAuth.js';
 import { scanWaste, chatWithAssistant, transcribeAudio } from '../controllers/aiController.js';
+import { validateBody } from '../middleware/validateRequest.js';
+import { aiChatSchema } from '../validation/schemas.js';
 
 const router = Router();
 
@@ -28,7 +30,7 @@ router.post(
   scanWaste
 );
 
-router.post('/chat', verifySupabaseAuth, chatWithAssistant);
+router.post('/chat', verifySupabaseAuth, validateBody(aiChatSchema), chatWithAssistant);
 router.post('/speech/transcribe', upload.single('audio'), transcribeAudio);
 
 export default router;

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import { createBulkNotifications } from '../services/notificationService.js';
 
 export async function getAnnouncements(req, res) {
   try {
@@ -49,6 +50,38 @@ export async function createAnnouncement(req, res) {
       .single();
 
     if (error) throw error;
+
+    let usersQuery = supabaseAdmin.from('users').select('id');
+    let workersQuery = supabaseAdmin.from('workers').select('id').eq('is_active', true);
+    if (villageId) {
+      usersQuery = usersQuery.eq('village_id', villageId);
+      workersQuery = workersQuery.eq('village_id', villageId);
+    }
+
+    const [usersRes, workersRes] = await Promise.all([usersQuery, workersQuery]);
+
+    const notifications = [
+      ...((usersRes.data || []).map((u) => ({
+        actorType: 'user',
+        actorId: u.id,
+        kind: 'announcement',
+        title,
+        body: content,
+        link: '/announcements',
+        data: { announcement_id: data.id },
+      }))),
+      ...((workersRes.data || []).map((w) => ({
+        actorType: 'worker',
+        actorId: w.id,
+        kind: 'announcement',
+        title,
+        body: content,
+        link: '/announcements',
+        data: { announcement_id: data.id },
+      }))),
+    ];
+
+    await createBulkNotifications(notifications);
     res.status(201).json({ announcement: data });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to create announcement' });

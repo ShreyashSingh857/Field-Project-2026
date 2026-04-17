@@ -1,4 +1,41 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import { sendWhatsAppSafely } from '../services/whatsappService.js';
+
+const BIN_ALERT_THRESHOLD = 80;
+
+function crossedThreshold(previousFill, nextFill, threshold) {
+  const prev = Number(previousFill ?? 0);
+  const next = Number(nextFill ?? 0);
+  return prev < threshold && next >= threshold;
+}
+
+async function notifyWorkersForBinAlert(bin, nextFill) {
+  if (!bin?.village_id) return;
+
+  let query = supabaseAdmin
+    .from('workers')
+    .select('id,name,phone')
+    .eq('is_active', true)
+    .eq('village_id', bin.village_id)
+    .not('phone', 'is', null)
+    .limit(10);
+
+  if (bin.assigned_panchayat_id) {
+    query = query.eq('assigned_area', bin.assigned_panchayat_id);
+  }
+
+  const { data: workers, error } = await query;
+  if (error) throw error;
+
+  await Promise.all((workers || []).map((worker) => {
+    if (!worker.phone) return Promise.resolve();
+    return sendWhatsAppSafely({
+      to: worker.phone,
+      body: `Bin alert: ${bin.label || bin.id} has reached ${nextFill}% fill level. Please schedule pickup.`,
+      tag: 'bin-fill-alert',
+    });
+  }));
+}
 
 function getSensorKey(req) {
   return String(req.headers['x-sensor-key'] || req.headers.authorization?.replace(/^Bearer\s+/i, '') || '').trim();
@@ -37,6 +74,7 @@ export async function ingestBinReading(req, res) {
     if (!bin) return res.status(404).json({ error: 'Bin not found' });
 
     const nextFill = normalizedFill ?? Number(bin.fill_level ?? 0);
+    const thresholdCrossed = crossedThreshold(bin.fill_level, nextFill, BIN_ALERT_THRESHOLD);
     const updatePayload = {
       fill_level: nextFill,
       last_sensor_update: timestamp || new Date().toISOString(),
@@ -50,6 +88,10 @@ export async function ingestBinReading(req, res) {
       .select('*')
       .single();
     if (updateError) throw updateError;
+
+    if (thresholdCrossed) {
+      await notifyWorkersForBinAlert(bin, nextFill);
+    }
 
     return res.json({
       ok: true,

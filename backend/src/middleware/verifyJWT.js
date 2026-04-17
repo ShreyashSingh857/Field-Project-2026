@@ -1,8 +1,8 @@
 import { verifyToken } from '../services/jwtService.js';
+import { getRequestToken } from '../utils/authToken.js';
 
 export function verifyJWT(req, res, next) {
-	const auth = req.headers.authorization || '';
-	const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+	const token = getRequestToken(req);
 	if (!token) return res.status(401).json({ error: 'Missing token' });
 	try {
 		req.user = verifyToken(token);

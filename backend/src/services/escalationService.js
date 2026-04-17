@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
-import { getSlaStatus } from './slaService.js';
+import { calculateTaskDueAt, getSlaStatus } from './slaService.js';
 
 function buildEscalationRecord(kind, row, dueAt, reason) {
 	const status = getSlaStatus(dueAt, row.completed_at || null);
@@ -23,7 +23,7 @@ export async function listOpenEscalations(limit = 100) {
 	const [issuesRes, tasksRes] = await Promise.all([
 		supabaseAdmin
 			.from('issue_reports')
-			.select('id,description,status,location_address,village_id,created_at,updated_at,created_task_id,reviewed_by,rejection_reason')
+			.select('id,description,status,location_address,village_id,created_at,updated_at,created_task_id,reviewed_by,rejection_reason,priority')
 			.in('status', ['open', 'assigned'])
 			.order('created_at', { ascending: false })
 			.limit(limit),
@@ -38,13 +38,13 @@ export async function listOpenEscalations(limit = 100) {
 	if (tasksRes.error) throw tasksRes.error;
 
 	const issues = (issuesRes.data || []).map((row) => {
-		const dueAt = new Date(new Date(row.created_at).getTime() + 72 * 60 * 60 * 1000).toISOString();
+		const dueAt = calculateTaskDueAt(row.priority || 2, row.created_at);
 		return buildEscalationRecord('issue', row, dueAt, 'Open issue older than SLA threshold');
 	}).filter((row) => row.sla_status === 'overdue');
 
 	const tasks = (tasksRes.data || [])
 		.map((row) => {
-			const dueAt = row.due_at || new Date(new Date(row.created_at).getTime() + 72 * 60 * 60 * 1000).toISOString();
+			const dueAt = row.due_at || calculateTaskDueAt(row.priority || 2, row.created_at);
 			return buildEscalationRecord('task', row, dueAt, 'Task not completed before SLA deadline');
 		})
 		.filter((row) => row.sla_status === 'overdue');
