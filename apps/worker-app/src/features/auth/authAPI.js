@@ -16,3 +16,8 @@ export async function getCurrentWorkerSession() {
 export async function logoutWorkerSession() {
   return true;
 }
+
+export async function changeWorkerPassword(current_password, new_password) {
+  const { data } = await api.patch('/workers/me/password', { current_password, new_password });
+  return data;
+}

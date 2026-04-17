@@ -10,7 +10,7 @@ export async function getEscalations(req, res) {
 
 export async function resolveEscalationById(req, res) {
 	try {
-		return res.json({ escalation: await resolveEscalation(req.params.id, req.admin.id) });
+		return res.json({ escalation: await resolveEscalation(req.params.id, req.admin.id, req.body?.kind || 'issue') });
 	} catch (err) {
 		return res.status(500).json({ error: err.message || 'Failed to resolve escalation' });
 	}

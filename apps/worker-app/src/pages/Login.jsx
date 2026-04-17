@@ -19,9 +19,9 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--sm-bg)] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-(--sm-bg) flex items-center justify-center px-4">
       <form onSubmit={onSubmit} className="bg-white w-full max-w-sm rounded-xl p-5 shadow-sm border border-gray-100">
-        <h1 className="text-xl font-bold text-[var(--sm-primary)] mb-1">Safai Mitra Login</h1>
+        <h1 className="text-xl font-bold text-(--sm-primary) mb-1">Safai Mitra Login</h1>
         <p className="text-xs text-gray-500 mb-4">Sign in with your worker ID and password</p>
 
         <label className="block text-sm font-medium mb-1">Employee ID</label>

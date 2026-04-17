@@ -22,3 +22,7 @@ backend/MIGRATE_MARKETPLACE_MODERATION.sql
 backend/scripts/applyMigration.js
 backend/scripts/checkTables.js
 backend/scripts/fetchSchema.js
+
+apps/user-app/.env
+apps/admin-app/.env
+apps/worker-app/.env

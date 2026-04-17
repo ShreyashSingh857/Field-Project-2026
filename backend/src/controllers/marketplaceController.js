@@ -60,7 +60,13 @@ export async function createListing(req, res) {
       return res.status(400).json({ error: 'Photo is required for marketplace listing' });
     }
 
-    // Upload photo first
+    // Validate image before upload
+    const aiValidation = await ImageValidationService.validateImageBuffer(req.file.buffer, req.file.mimetype);
+    if (!aiValidation.valid) {
+      return res.status(400).json({ error: 'Image rejected: ' + aiValidation.reason });
+    }
+
+    // Upload photo only after validation
     let photoUrl = null;
     try {
       const ext = req.file.mimetype.split('/')[1] || 'jpg';
@@ -77,15 +83,6 @@ export async function createListing(req, res) {
       console.error('Photo upload error:', err);
       return res.status(400).json({ error: 'Failed to upload photo' });
     }
-
-    // AI Validation: Check image contains second-hand items
-    console.log(`[AI] Validating image: ${photoUrl}`);
-    const aiValidation = await ImageValidationService.validateListingImage(photoUrl, {
-      title: title.trim(),
-      description: description?.trim() || '',
-      price: parsedPrice,
-    });
-    console.log(`[AI] Validation result:`, aiValidation);
 
     // Create listing
     const listing = await MarketplaceService.createListing(userId, {
@@ -180,6 +177,11 @@ export async function updateListing(req, res) {
         existingForModeration = listingSnapshot;
       }
 
+      aiValidation = await ImageValidationService.validateImageBuffer(req.file.buffer, req.file.mimetype);
+      if (!aiValidation.valid) {
+        return res.status(400).json({ error: 'Image rejected: ' + aiValidation.reason });
+      }
+
       const ext = req.file.mimetype.split('/')[1] || 'jpg';
       const fileName = `listings/${userId}/${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabaseAdmin.storage
@@ -193,12 +195,6 @@ export async function updateListing(req, res) {
       updates.photo_url = supabaseAdmin.storage
         .from('marketplace-photos')
         .getPublicUrl(fileName).data.publicUrl;
-
-      aiValidation = await ImageValidationService.validateListingImage(updates.photo_url, {
-        title: updates.title || title || existingForModeration?.title || '',
-        description: updates.description || description || existingForModeration?.description || '',
-        price: updates.price ?? existingForModeration?.price,
-      });
     }
 
     const updated = await MarketplaceService.updateListing(id, userId, updates);

@@ -52,11 +52,16 @@ export async function listOpenEscalations(limit = 100) {
 	return [...issues, ...tasks].slice(0, limit);
 }
 
-export async function resolveEscalation(issueId, adminId) {
+export async function resolveEscalation(escalationId, adminId, kind = 'issue') {
+	const table = kind === 'task' ? 'tasks' : 'issue_reports';
+	const updates = kind === 'task'
+		? { status: 'done', updated_at: new Date().toISOString() }
+		: { status: 'resolved', reviewed_by: adminId, updated_at: new Date().toISOString() };
+
 	const { data, error } = await supabaseAdmin
-		.from('issue_reports')
-		.update({ status: 'resolved', reviewed_by: adminId, updated_at: new Date().toISOString() })
-		.eq('id', issueId)
+		.from(table)
+		.update(updates)
+		.eq('id', escalationId)
 		.select('*')
 		.single();
 	if (error) throw error;

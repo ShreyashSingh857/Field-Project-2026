@@ -1,14 +1,6 @@
 // backend/src/controllers/reportController.js
 import { supabaseAdmin } from '../config/supabase.js';
-
-async function getVillageIdsForAdmin(admin) {
-  let query = supabaseAdmin.from('villages').select('id');
-  if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
-  if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
-  if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
-  const { data } = await query;
-  return (data || []).map((v) => v.id);
-}
+import { getVillageIdsForAdmin } from '../utils/adminHelpers.js';
 
 export async function createIssue(req, res) {
   try {
@@ -92,7 +84,9 @@ export async function getIssues(req, res) {
 
     if (req.admin?.type === 'admin') {
       if (req.admin.role === 'ward_member') {
-        query = query.eq('reviewed_by', req.admin.id);
+        const villageIds = await getVillageIdsForAdmin(req.admin);
+        if (!villageIds.length) return res.json({ issues: [] });
+        query = query.in('village_id', villageIds);
       } else {
         const villageIds = await getVillageIdsForAdmin(req.admin);
         if (!villageIds.length) return res.json({ issues: [] });

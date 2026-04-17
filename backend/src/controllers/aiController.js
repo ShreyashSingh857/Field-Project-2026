@@ -1,14 +1,9 @@
 import OpenAI, { toFile } from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
-import { analyzeWasteImage } from '../services/aiService.js';
-dotenv.config();
+import { analyzeWasteImage, generateAssistantReply } from '../services/aiService.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const LANGUAGE_NAME = {
   en: 'English',
@@ -76,25 +71,11 @@ export const chatWithAssistant = async (req, res) => {
 
     const wasteRelated = isWasteRelated(latestMessage);
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: `You are a waste-management assistant for rural India.
-    Primary focus is waste disposal, recycling, composting, sanitation, bins, litter, and cleanliness drives.
-    You may answer greetings and simple general questions naturally.
-    If a question is outside waste management, give a short helpful answer and gently steer the user back to waste-management help.
-Keep responses practical, concise, and village-friendly with simple steps.
-Always respond in ${LANGUAGE_NAME[selectedLanguage]}.`,
+    let reply = await generateAssistantReply({
+      message: latestMessage,
+      history,
+      languageName: LANGUAGE_NAME[selectedLanguage],
     });
-
-    // Convert recent history to Gemini format
-    const chatHistory = history.slice(-10).map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-    const chat = model.startChat({ history: chatHistory });
-    const result = await chat.sendMessage(latestMessage);
-    let reply = result.response.text();
 
     if (!wasteRelated) {
       const suffix = selectedLanguage === 'hi'

@@ -13,7 +13,7 @@ export async function workerLogin(req, res) {
 
     const { data: worker, error } = await supabaseAdmin
       .from('workers')
-      .select('id,name,employee_id,password_hash,assigned_area,village_id,phone,is_active,created_by_admin_id')
+      .select('id,name,employee_id,password_hash,assigned_area,village_id,phone,is_active,created_by_admin_id,password_changed')
       .ilike('employee_id', employee_id)
       .maybeSingle();
 
@@ -36,6 +36,7 @@ export async function workerLogin(req, res) {
       assigned_area: worker.assigned_area,
       village_id: worker.village_id,
       created_by_admin_id: worker.created_by_admin_id,
+      password_changed: worker.password_changed,
     });
 
     return res.json({
@@ -48,6 +49,7 @@ export async function workerLogin(req, res) {
         village_id: worker.village_id,
         created_by_admin_id: worker.created_by_admin_id,
         phone: worker.phone,
+        password_changed: worker.password_changed,
       },
     });
   } catch (err) {
@@ -59,7 +61,7 @@ export async function workerMe(req, res) {
   try {
     const { data, error } = await supabaseAdmin
       .from('workers')
-      .select('id,name,employee_id,assigned_area,village_id,phone,is_active,created_by_admin_id')
+      .select('id,name,employee_id,assigned_area,village_id,phone,is_active,created_by_admin_id,password_changed')
       .eq('id', req.worker.id)
       .single();
 

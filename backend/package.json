@@ -7,7 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed:demo": "node src/scripts/seedDemoAdmins.js",
-    "seed:geo": "..\\.venv\\Scripts\\python.exe scripts/seed_geo_boundaries.py",
+    "seed:geo": "python3 scripts/seed_geo_boundaries.py",
     "seed:geo:fast": "set SEED_FAST_MODE=1&& set SEED_SIMPLIFY_GEOMETRY=0&& set SEED_COMPUTE_CENTROID=0&& set SEED_UPDATE_DEMO_VILLAGE=0&& ..\\.venv\\Scripts\\python.exe scripts/seed_geo_boundaries.py",
     "seed:geo:chunks": "..\\.venv\\Scripts\\python.exe scripts/seed_geo_chunks.py",
     "reset:geo": "..\\.venv\\Scripts\\python.exe scripts/reset_geo_tables.py",

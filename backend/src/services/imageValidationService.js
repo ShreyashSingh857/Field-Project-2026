@@ -215,12 +215,13 @@ class ImageValidationService {
   /**
    * Validate image from base64 or file buffer
    */
-  static async validateImageBuffer(base64Data) {
+  static async validateImageBuffer(buffer, _mimeType = 'image/jpeg') {
     if (!process.env.GOOGLE_VISION_API_KEY) {
       return { valid: true, reason: 'Validation skipped', confidence: 0 };
     }
 
     try {
+      const base64Data = Buffer.isBuffer(buffer) ? buffer.toString('base64') : String(buffer || '');
       const response = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
         {

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { validateEnv } from './config/validateEnv.js';
 import express from 'express';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
@@ -17,6 +18,8 @@ import workerRoutes from './routes/workerRoutes.js';
 import sensorRoutes from './routes/sensorRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import { buildOperationalSummary } from './services/reportingService.js';
+
+validateEnv();
 
 const app = express();
 const port = Number(process.env.PORT || 5000);

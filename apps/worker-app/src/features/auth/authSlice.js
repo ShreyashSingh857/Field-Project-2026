@@ -39,7 +39,13 @@ const authSlice = createSlice({
     error: null,
     bootstrapped: false,
   },
-  reducers: {},
+  reducers: {
+    markPasswordChanged: (state) => {
+      if (state.worker) {
+        state.worker.password_changed = true;
+      }
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(bootstrapSession.fulfilled, (state, action) => {
@@ -69,4 +75,5 @@ const authSlice = createSlice({
   },
 });
 
+export const { markPasswordChanged } = authSlice.actions;
 export default authSlice.reducer;

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { verifyToken } from '../services/jwtService.js';
+import { getVillageIdsForAdmin } from '../utils/adminHelpers.js';
 
 function buildItem(kind, title, body, link, sourceId, createdAt, extra = {}) {
 	return { id: `${kind}:${sourceId}`, kind, title, body, link, created_at: createdAt, ...extra };
@@ -29,15 +30,6 @@ async function resolveUserVillage(user) {
 async function resolveWorkerProfile(workerId) {
 	const { data } = await supabaseAdmin.from('workers').select('id,name,village_id,assigned_area').eq('id', workerId).maybeSingle();
 	return data || null;
-}
-
-async function getVillageIdsForAdmin(admin) {
-	let query = supabaseAdmin.from('villages').select('id');
-	if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
-	if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
-	if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
-	const { data } = await query;
-	return (data || []).map((v) => v.id);
 }
 
 export async function getNotifications(req, res) {

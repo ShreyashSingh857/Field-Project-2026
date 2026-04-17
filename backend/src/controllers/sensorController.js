@@ -5,7 +5,8 @@ function getSensorKey(req) {
 }
 
 function getSensorSecret() {
-  return process.env.SENSOR_API_KEY || 'dev-sensor-key';
+  if (!process.env.SENSOR_API_KEY) throw new Error('SENSOR_API_KEY is not set');
+  return process.env.SENSOR_API_KEY;
 }
 
 function clampFillLevel(value) {

@@ -1,6 +1,7 @@
 import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase.js';
 import { calculateTaskDueAt } from '../services/slaService.js';
+import { getVillageIdsForAdmin } from '../utils/adminHelpers.js';
 import {
 	completeTaskById,
 	getTaskById,
@@ -21,15 +22,6 @@ function getWorkerContext(req) {
 	const workerId = req.worker?.id || userMetadata.worker_id || null;
 	const villageId = req.worker?.village_id || userMetadata.village_id || null;
 	return { workerId, villageId };
-}
-
-async function getVillageIdsForAdmin(admin) {
-	let query = supabaseAdmin.from('villages').select('id');
-	if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
-	if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
-	if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
-	const { data } = await query;
-	return (data || []).map((v) => v.id);
 }
 
 async function uploadTaskProof(file, taskId) {
@@ -100,6 +92,12 @@ export async function startTask(req, res) {
 		}
 
 		const existingTask = await getTaskById(req.params.id);
+		if (!existingTask) return res.status(404).json({ error: 'Task not found' });
+
+		if (String(existingTask.assigned_worker_id) !== String(workerId)) {
+			return res.status(403).json({ error: 'This task is not assigned to you' });
+		}
+
 		const task = await startTaskById({ taskId: req.params.id, workerId });
 
 		if (!task) {
@@ -127,6 +125,12 @@ export async function completeTask(req, res) {
 		}
 
 		const existingTask = await getTaskById(req.params.id);
+		if (!existingTask) return res.status(404).json({ error: 'Task not found' });
+
+		if (String(existingTask.assigned_worker_id) !== String(workerId)) {
+			return res.status(403).json({ error: 'This task is not assigned to you' });
+		}
+
 		const beforeFile = req.files?.before_photo?.[0] || null;
 		const afterFile = req.files?.after_photo?.[0] || null;
 		const legacyFile = req.files?.proof_photo?.[0] || null;

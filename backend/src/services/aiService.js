@@ -1,11 +1,15 @@
 // backend/src/services/aiService.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('Missing GEMINI_API_KEY in .env');
-}
+let genAI = null;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+function getClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not set. AI features are unavailable.');
+  }
+  if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  return genAI;
+}
 
 const SYSTEM_PROMPT = `You are a waste management expert for rural India.
 When shown an image of waste, identify what kind of waste it is and provide
@@ -26,11 +30,12 @@ no code fences, no extra explanation — only raw JSON:
   "tip": "<one practical tip about recycling or reuse value of this waste>"
 }`;
 
-// Use gemini-2.5-flash — fast, cheap, supports vision
-const model = genAI.getGenerativeModel({ 
-  model: 'gemini-2.5-flash',
-  systemInstruction: SYSTEM_PROMPT
-});
+function getVisionModel() {
+  return getClient().getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction: SYSTEM_PROMPT,
+  });
+}
 
 /**
  * Analyze a waste image using Gemini Vision.
@@ -39,6 +44,8 @@ const model = genAI.getGenerativeModel({
  * @returns {Promise<{ waste_type, category, steps, tip }>}
  */
 export async function analyzeWasteImage(imageBuffer, mimeType) {
+  const model = getVisionModel();
+
   // Convert buffer to base64
   const base64Image = imageBuffer.toString('base64');
 
@@ -82,4 +89,25 @@ export async function analyzeWasteImage(imageBuffer, mimeType) {
     steps: Array.isArray(parsed.steps) ? parsed.steps.map(String) : [],
     tip: String(parsed.tip || ''),
   };
+}
+
+export async function generateAssistantReply({ message, history = [], languageName = 'English' }) {
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction: `You are a waste-management assistant for rural India.
+Primary focus is waste disposal, recycling, composting, sanitation, bins, litter, and cleanliness drives.
+You may answer greetings and simple general questions naturally.
+If a question is outside waste management, give a short helpful answer and gently steer the user back to waste-management help.
+Keep responses practical, concise, and village-friendly with simple steps.
+Always respond in ${languageName}.`,
+  });
+
+  const chatHistory = history.slice(-10).map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const chat = model.startChat({ history: chatHistory });
+  const result = await chat.sendMessage(String(message || '').trim());
+  return result.response.text();
 }
