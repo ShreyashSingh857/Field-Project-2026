@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { adminLogin, adminMe } from '../controllers/adminController.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
+import { validateBody } from '../middleware/validateRequest.js';
+import { adminLoginSchema } from '../validation/schemas.js';
 
 const ROLE_CHILD = {
   zilla_parishad: 'block_samiti',
@@ -457,8 +459,12 @@ function geometryVertices(geometry) {
   return pts;
 }
 
-router.post('/login', adminLogin);
+router.post('/login', validateBody(adminLoginSchema), adminLogin);
 router.get('/me', verifyAdminJWT, adminMe);
+router.post('/logout', (_req, res) => {
+  res.clearCookie('admin_token', { path: '/' });
+  return res.json({ ok: true });
+});
 
 router.get('/sub-admins', verifyAdminJWT, async (req, res) => {
   try {

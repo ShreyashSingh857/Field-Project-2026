@@ -3,9 +3,6 @@ import api from '../../services/axiosInstance';
 export const loginAdminAPI = async (email, password) => {
     try {
         const { data } = await api.post('/admin/login', { email, password });
-        if (data?.token) {
-            localStorage.setItem('admin_token', data.token);
-        }
         return data;
     } catch (err) {
         throw new Error(err.response?.data?.error || err.message || 'Login failed');
@@ -13,7 +10,7 @@ export const loginAdminAPI = async (email, password) => {
 };
 
 export function logoutAdmin() {
-    localStorage.removeItem('admin_token');
+    api.post('/admin/logout').catch(() => {});
     localStorage.removeItem('admin_user');
 }
 

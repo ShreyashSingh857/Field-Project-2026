@@ -4,9 +4,8 @@ import { selectAdmin } from '../features/auth/authSlice';
 
 export default function ProtectedRoute({ children }) {
     const admin = useSelector(selectAdmin);
-    const token = localStorage.getItem('admin_token');
 
-    if (!admin && !token) {
+    if (!admin) {
         return <Navigate to="/login" replace />;
     }
 

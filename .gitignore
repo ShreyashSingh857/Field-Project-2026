@@ -4,6 +4,10 @@ node_modules
 !.env.example
 backend/.env
 apps/*/.env
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
 apps/*/dist
 backend/dist
 **/__pycache__/
@@ -22,3 +26,7 @@ backend/MIGRATE_MARKETPLACE_MODERATION.sql
 backend/scripts/applyMigration.js
 backend/scripts/checkTables.js
 backend/scripts/fetchSchema.js
+
+apps/user-app/.env
+apps/admin-app/.env
+apps/worker-app/.env

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import api from '../services/axiosInstance';
-
-const KEY = 'gwc-user-seen-notifications';
+import { supabase } from '../services/supabase';
 
 function formatTime(value) {
 	const ts = new Date(value).getTime();
@@ -25,10 +24,10 @@ export default function NotificationCenter() {
 	const [open, setOpen] = useState(false);
 	const [toasts, setToasts] = useState([]);
 
-	const seen = useMemo(() => new Set(JSON.parse(localStorage.getItem(KEY) || '[]')), []);
-
 	useEffect(() => {
+		if (!user?.id) return;
 		let mounted = true;
+		let channel = null;
 		const pushToast = (item) => setToasts((list) => [...list, { ...item, key: `${item.id}-${Date.now()}` }].slice(-3));
 		const showBrowser = (item) => {
 			if (Notification.permission === 'granted') new Notification(item.title, { body: item.body });
@@ -39,19 +38,44 @@ export default function NotificationCenter() {
 				if (!mounted) return;
 				const next = (data.notifications || []).slice(0, 12);
 				setItems(next);
-				const newItems = next.filter((item) => !seen.has(item.id));
-				if (newItems.length) {
-					localStorage.setItem(KEY, JSON.stringify([...seen, ...newItems.map((item) => item.id)]));
-					newItems.slice(0, 3).forEach((item) => { pushToast(item); showBrowser(item); });
-				}
 			} catch (_e) {}
 		};
+
+		const handleRealtime = (payload) => {
+			if (payload?.new?.actor_id !== user.id) return;
+			pushToast(payload.new);
+			showBrowser(payload.new);
+			load();
+		};
+
 		load();
 		const id = setInterval(load, 60000);
-		return () => { mounted = false; clearInterval(id); };
-	}, [seen]);
+		if (supabase) {
+			channel = supabase
+				.channel(`user-notifications-${user.id}`)
+				.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'actor_type=eq.user' }, handleRealtime)
+				.subscribe();
+		}
 
-	const unread = Math.max(0, items.length - seen.size);
+		return () => {
+			mounted = false;
+			clearInterval(id);
+			if (channel && supabase) supabase.removeChannel(channel);
+		};
+	}, [user?.id]);
+
+	const unread = items.filter((item) => !item.read).length;
+
+	const openItem = async (item) => {
+		try {
+			if (!item.read) {
+				await api.patch(`/notifications/${item.id}/read`);
+				setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+			}
+		} catch (_e) {}
+		setOpen(false);
+		window.location.assign(item.link || '/dashboard');
+	};
 
 	return (
 		<>
@@ -64,7 +88,7 @@ export default function NotificationCenter() {
 					<div className="absolute right-0 top-full z-50 mt-2 w-[min(88vw,18rem)] max-h-[55vh] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 sm:w-80 sm:max-h-96">
 						<div className="flex items-center justify-between border-b px-4 py-3"><strong className="text-sm">Notifications</strong><button onClick={() => setOpen(false)}><X className="h-4 w-4" /></button></div>
 						<div className="max-h-[calc(55vh-48px)] overflow-y-auto sm:max-h-96">
-							{items.length === 0 ? <div className="p-4 text-sm text-gray-500">No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => { setOpen(false); window.location.assign(item.link || '/dashboard'); }} className="block w-full border-b px-4 py-3 text-left hover:bg-gray-50"><div className="wrap-break-word text-sm font-semibold text-black">{item.title}</div><div className="mt-1 wrap-break-word text-xs text-gray-600">{item.body}</div><div className="mt-1 text-[11px] text-gray-500">{formatTime(item.created_at || item.createdAt)}</div></button>)}
+							{items.length === 0 ? <div className="p-4 text-sm text-gray-500">No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => openItem(item)} className={`block w-full border-b px-4 py-3 text-left hover:bg-gray-50 ${item.read ? '' : 'bg-blue-50/40'}`}><div className="wrap-break-word text-sm font-semibold text-black">{item.title}</div><div className="mt-1 wrap-break-word text-xs text-gray-600">{item.body}</div><div className="mt-1 text-[11px] text-gray-500">{formatTime(item.created_at || item.createdAt)}</div></button>)}
 						</div>
 					</div>
 				)}

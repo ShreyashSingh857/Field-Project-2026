@@ -1,6 +1,7 @@
 // backend/src/controllers/binsController.js
 import { supabaseAdmin } from '../config/supabase.js';
 import { verifyToken } from '../services/jwtService.js';
+import { getVillageIdsForAdmin } from '../utils/adminHelpers.js';
 
 const EMPTY_UUID = '00000000-0000-0000-0000-000000000000';
 const ADMIN_ROLES = new Set(['zilla_parishad', 'block_samiti', 'gram_panchayat', 'ward_member']);
@@ -47,19 +48,6 @@ function pointInGeometry(point, geometry) {
     });
   }
   return false;
-}
-
-async function getVillageIdsForAdmin(admin) {
-  if (!admin?.role) return [];
-  if (admin.role === 'ward_member') return [];
-
-  let query = supabaseAdmin.from('villages').select('id');
-  if (admin.role === 'zilla_parishad') query = query.eq('district', admin.jurisdiction_name);
-  if (admin.role === 'block_samiti') query = query.eq('block_name', admin.jurisdiction_name);
-  if (admin.role === 'gram_panchayat') query = query.eq('gram_panchayat_name', admin.jurisdiction_name);
-
-  const { data } = await query;
-  return (data || []).map((v) => v.id);
 }
 
 // ── BINS ───────────────────────────────────────────────────────────────────

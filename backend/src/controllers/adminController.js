@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../config/supabase.js';
 import { signToken } from '../services/jwtService.js';
+import { buildAuthCookieOptions } from '../utils/cookieOptions.js';
 
 const DEMO_ADMIN_PASSWORD = 'Demo@123456';
 const DEMO_ADMINS = {
@@ -38,6 +39,7 @@ export async function adminLogin(req, res) {
           email,
           demo: true,
         });
+        res.cookie('admin_token', token, buildAuthCookieOptions());
         return res.json({ token, admin: { id: demoAdmin.id, name: demoAdmin.name, email, role: demoAdmin.role, jurisdiction_name: demoAdmin.jurisdiction_name, lgd_jurisdiction_code: null } });
       }
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -59,6 +61,8 @@ export async function adminLogin(req, res) {
       name: admin.name,
       email: admin.email,
     });
+
+    res.cookie('admin_token', token, buildAuthCookieOptions());
 
     return res.json({
       token,

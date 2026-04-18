@@ -1,0 +1,2 @@
+ALTER TABLE issue_reports
+ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 2 CHECK (priority IN (1, 2, 3));

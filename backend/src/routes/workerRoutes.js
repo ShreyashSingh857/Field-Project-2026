@@ -1,10 +1,19 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { workerLogin, workerMe } from '../controllers/workerController.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { verifyAdminJWT } from '../middleware/verifyAdminJWT.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { verifyWorkerJWT } from '../middleware/verifyWorkerJWT.js';
+import { validateBody } from '../middleware/validateRequest.js';
+import {
+  workerCreateSchema,
+  workerLoginSchema,
+  workerPasswordSchema,
+  workerStatusSchema,
+  workerUpdateSchema,
+} from '../validation/schemas.js';
 
 const router = Router();
 
@@ -47,7 +56,7 @@ async function resolveVillageForWardMember(adminId, requestedVillageId) {
 }
 
 function generateEmployeeId() {
-  return `GWC-WRK-${Math.floor(1000 + Math.random() * 9000)}`;
+  return `GWC-WRK-${randomUUID().replace(/-/g, '').substring(0, 8).toUpperCase()}`;
 }
 
 function generateWorkerPassword() {
@@ -57,8 +66,51 @@ function generateWorkerPassword() {
   return out;
 }
 
-router.post('/login', workerLogin);
+router.post('/login', validateBody(workerLoginSchema), workerLogin);
 router.get('/me', verifyWorkerJWT, workerMe);
+router.post('/logout', (_req, res) => {
+  res.clearCookie('worker_token', { path: '/' });
+  return res.json({ ok: true });
+});
+router.patch('/me/password', verifyWorkerJWT, validateBody(workerPasswordSchema), async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.current_password || '');
+    const newPassword = String(req.body?.new_password || '');
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'current_password and new_password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'new_password must be at least 8 characters long' });
+    }
+
+    const { data: worker, error: workerErr } = await supabaseAdmin
+      .from('workers')
+      .select('id,password_hash')
+      .eq('id', req.worker.id)
+      .maybeSingle();
+    if (workerErr) throw workerErr;
+    if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+    const ok = await bcrypt.compare(currentPassword, worker.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    const { error: updateErr } = await supabaseAdmin
+      .from('workers')
+      .update({
+        password_hash,
+        password_changed: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', req.worker.id);
+    if (updateErr) throw updateErr;
+
+    return res.json({ message: 'Password changed successfully', password_changed: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to change password' });
+  }
+});
 
 router.get('/area-options', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
   try {
@@ -114,7 +166,7 @@ router.get('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) 
   }
 });
 
-router.post('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.post('/', verifyAdminJWT, requireRole('ward_member'), validateBody(workerCreateSchema), async (req, res) => {
   try {
     const { name, phone, assigned_area, village_id, language, password } = req.body || {};
     const { data: me } = await supabaseAdmin.from('admins').select('id,name').eq('id', req.admin.id).maybeSingle();
@@ -151,11 +203,16 @@ router.post('/', verifyAdminJWT, requireRole('ward_member'), async (req, res) =>
   }
 });
 
-router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), validateBody(workerUpdateSchema), async (req, res) => {
   try {
+    const allowed = ['name', 'phone', 'assigned_area', 'language'];
+    const updates = Object.fromEntries(
+      Object.entries(req.body).filter(([k]) => allowed.includes(k))
+    );
+
     const { data, error } = await supabaseAdmin
       .from('workers')
-      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
       .eq('created_by_admin_id', req.admin.id)
       .select('id,name,employee_id,assigned_area,village_id,phone,is_active,last_login_at,created_at')
@@ -167,7 +224,7 @@ router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), async (req, res
   }
 });
 
-router.patch('/:id/status', verifyAdminJWT, requireRole('ward_member'), async (req, res) => {
+router.patch('/:id/status', verifyAdminJWT, requireRole('ward_member'), validateBody(workerStatusSchema), async (req, res) => {
   try {
     const { is_active } = req.body || {};
     const { data, error } = await supabaseAdmin

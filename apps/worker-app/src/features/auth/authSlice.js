@@ -8,7 +8,6 @@ import {
 export const bootstrapSession = createAsyncThunk('auth/bootstrapSession', async () => {
   const session = await getCurrentWorkerSession();
   if (!session) return null;
-  localStorage.setItem('worker_token', session.token);
   return session;
 });
 
@@ -17,7 +16,6 @@ export const login = createAsyncThunk(
   async ({ employee_id, password }, { rejectWithValue }) => {
     try {
       const data = await loginWorkerWithSupabase(employee_id, password);
-      localStorage.setItem('worker_token', data.token);
       return data;
     } catch (err) {
       return rejectWithValue(err.message || 'Login failed');
@@ -27,19 +25,24 @@ export const login = createAsyncThunk(
 
 export const logout = createAsyncThunk('auth/logout', async () => {
   await logoutWorkerSession();
-  localStorage.removeItem('worker_token');
 });
 
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
     worker: null,
-    token: localStorage.getItem('worker_token') || null,
+    token: null,
     loading: false,
     error: null,
     bootstrapped: false,
   },
-  reducers: {},
+  reducers: {
+    markPasswordChanged: (state) => {
+      if (state.worker) {
+        state.worker.password_changed = true;
+      }
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(bootstrapSession.fulfilled, (state, action) => {
@@ -69,4 +72,5 @@ const authSlice = createSlice({
   },
 });
 
+export const { markPasswordChanged } = authSlice.actions;
 export default authSlice.reducer;

@@ -8,8 +8,8 @@
 export function verifyAdminKey(req, res, next) {
   const adminKey = process.env.ADMIN_API_KEY;
   if (!adminKey) {
-    console.warn('[verifyAdminKey] ADMIN_API_KEY is not set — write endpoints are OPEN!');
-    return next(); // Warn but allow — prevents accidental lockout during dev
+    console.error('[verifyAdminKey] ADMIN_API_KEY is not set. Blocking all write requests.');
+    return res.status(500).json({ error: 'Server misconfiguration: admin key not set' });
   }
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';

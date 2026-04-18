@@ -1,39 +1,66 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import api from '../services/axiosInstance';
-
-const KEY = 'gwc-admin-seen-notifications';
+import supabase from '../services/supabaseClient';
 
 export default function NotificationCenter() {
+	const admin = useSelector((s) => s.auth.admin);
 	const [items, setItems] = useState([]);
 	const [open, setOpen] = useState(false);
 	const [toasts, setToasts] = useState([]);
-	const seen = useMemo(() => new Set(JSON.parse(localStorage.getItem(KEY) || '[]')), []);
 
 	useEffect(() => {
+		if (!admin?.id) return;
 		let mounted = true;
+		let channel = null;
 		const load = async () => {
 			try {
 				const { data } = await api.get('/notifications');
 				if (!mounted) return;
 				const next = (data.notifications || []).slice(0, 12);
 				setItems(next);
-				const fresh = next.filter((item) => !seen.has(item.id));
-				if (fresh.length) {
-					localStorage.setItem(KEY, JSON.stringify([...seen, ...fresh.map((item) => item.id)]));
-					setToasts((list) => [...list, ...fresh.slice(0, 3)].slice(-3));
-					fresh.slice(0, 3).forEach((item) => {
-						if (Notification.permission === 'granted') new Notification(item.title, { body: item.body });
-					});
-				}
 			} catch (_e) {}
 		};
+
+		const handleRealtime = (payload) => {
+			if (payload?.new?.actor_id !== admin.id) return;
+			const item = payload.new;
+			setToasts((list) => [...list, item].slice(-3));
+			if (Notification.permission === 'granted') {
+				new Notification(item.title, { body: item.body });
+			}
+			load();
+		};
+
 		load();
 		const id = setInterval(load, 60000);
-		return () => { mounted = false; clearInterval(id); };
-	}, [seen]);
+		if (supabase) {
+			channel = supabase
+				.channel(`admin-notifications-${admin.id}`)
+				.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'actor_type=eq.admin' }, handleRealtime)
+				.subscribe();
+		}
 
-	const unread = Math.max(0, items.length - seen.size);
+		return () => {
+			mounted = false;
+			clearInterval(id);
+			if (channel && supabase) supabase.removeChannel(channel);
+		};
+	}, [admin?.id]);
+
+	const unread = items.filter((item) => !item.read).length;
+
+	const openItem = async (item) => {
+		try {
+			if (!item.read) {
+				await api.patch(`/notifications/${item.id}/read`);
+				setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+			}
+		} catch (_e) {}
+		setOpen(false);
+		window.location.assign(item.link || '/dashboard');
+	};
 
 	return (
 		<>
@@ -66,7 +93,7 @@ export default function NotificationCenter() {
 							<button type="button" onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
 						</div>
 						<div style={{ maxHeight: '360px', overflowY: 'auto' }}>
-							{items.length === 0 ? <div style={{ padding: '14px', fontSize: '13px', color: 'var(--admin-muted)' }}>No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => { setOpen(false); window.location.assign(item.link || '/dashboard'); }} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '12px 14px', borderBottom: '1px solid var(--admin-border)', cursor: 'pointer' }}><div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: 'var(--admin-text)' }}>{item.title}</div><div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>{item.body}</div></button>)}
+							{items.length === 0 ? <div style={{ padding: '14px', fontSize: '13px', color: 'var(--admin-muted)' }}>No notifications yet.</div> : items.map((item) => <button key={item.id} type="button" onClick={() => openItem(item)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: item.read ? 'transparent' : '#f8fbff', padding: '12px 14px', borderBottom: '1px solid var(--admin-border)', cursor: 'pointer' }}><div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: 'var(--admin-text)' }}>{item.title}</div><div style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>{item.body}</div></button>)}
 						</div>
 					</div>
 				)}

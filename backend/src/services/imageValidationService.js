@@ -203,10 +203,10 @@ class ImageValidationService {
       };
     } catch (err) {
       console.error('Image validation error:', err);
-      // Fail open - allow listing but mark as manual review needed
+      // Fail closed on provider errors to avoid auto-approving unsafe content.
       return {
-        valid: true,
-        reason: 'Could not validate image, flagged for manual review',
+        valid: false,
+        reason: 'Image validation service unavailable. Please retry upload shortly.',
         confidence: 0,
       };
     }
@@ -215,12 +215,13 @@ class ImageValidationService {
   /**
    * Validate image from base64 or file buffer
    */
-  static async validateImageBuffer(base64Data) {
+  static async validateImageBuffer(buffer, _mimeType = 'image/jpeg') {
     if (!process.env.GOOGLE_VISION_API_KEY) {
       return { valid: true, reason: 'Validation skipped', confidence: 0 };
     }
 
     try {
+      const base64Data = Buffer.isBuffer(buffer) ? buffer.toString('base64') : String(buffer || '');
       const response = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
         {
@@ -264,7 +265,11 @@ class ImageValidationService {
       return { valid: true, reason: 'Image validated', confidence: 0.85 };
     } catch (err) {
       console.error('Buffer validation error:', err);
-      return { valid: true, reason: 'Validation skipped (fallback)', confidence: 0 };
+      return {
+        valid: false,
+        reason: 'Image validation service unavailable. Please retry upload shortly.',
+        confidence: 0,
+      };
     }
   }
 }
