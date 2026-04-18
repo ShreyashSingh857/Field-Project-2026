@@ -32,14 +32,32 @@ const allowedOrigins = [
   process.env.USER_APP_URL,
   process.env.ADMIN_APP_URL,
   process.env.WORKER_APP_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://localhost:5176',
 ].filter(Boolean);
+const localDevOriginRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
+const corsOptions = {
+  credentials: true,
+  origin(origin, callback) {
+    // Allow non-browser clients like curl/Postman without Origin header.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!isProduction && localDevOriginRegex.test(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+};
+
+const cspConnectSrc = [
+  "'self'",
+  ...allowedOrigins,
+  process.env.SUPABASE_URL || '',
+];
+
+if (!isProduction) {
+  cspConnectSrc.push('http://localhost:*', 'http://127.0.0.1:*');
+}
 
 // ── Security & parsing ──────────────────────────────────────
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use(helmet({
@@ -48,7 +66,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-      connectSrc: ["'self'", ...allowedOrigins, process.env.SUPABASE_URL || ''].filter(Boolean),
+      connectSrc: cspConnectSrc.filter(Boolean),
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
       fontSrc: ["'self'", 'https:', 'data:'],
