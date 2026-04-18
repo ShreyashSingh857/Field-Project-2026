@@ -483,9 +483,6 @@ function BinMap() {
                                     </Popup>
                                 </Marker>
                             ))}
-                            {wardDrawPoints.length >= 3 && (
-                                <Polygon positions={closeRing(wardDrawPoints)} pathOptions={{ color: '#B45309', weight: 2, dashArray: '6 4' }} />
-                            )}
                             {pendingPoint && <Marker position={[pendingPoint.lat, pendingPoint.lng]} icon={makeImgIcon('/Half-filled-Dustbin.png')} />}
                         </MapContainer>
                     </div>
