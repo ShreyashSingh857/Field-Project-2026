@@ -205,10 +205,18 @@ router.post('/', verifyAdminJWT, requireRole('ward_member'), validateBody(worker
 
 router.patch('/:id', verifyAdminJWT, requireRole('ward_member'), validateBody(workerUpdateSchema), async (req, res) => {
   try {
-    const allowed = ['name', 'phone', 'assigned_area', 'language'];
-    const updates = Object.fromEntries(
-      Object.entries(req.body).filter(([k]) => allowed.includes(k))
-    );
+    const updates = {};
+    const allowedKeys = ['name', 'phone', 'assigned_area', 'language'];
+
+    for (const key of allowedKeys) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No allowed fields provided for update' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('workers')

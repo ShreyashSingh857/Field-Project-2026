@@ -527,6 +527,13 @@ router.post('/sub-admins', verifyAdminJWT, async (req, res) => {
       return res.status(403).json({ error: 'This role cannot create sub-admins' });
     }
 
+    const creator = await getAdminRow(req.admin.id);
+    if (!creator?.id) {
+      return res.status(403).json({
+        error: 'Your admin account is not mapped in database. Please login with a persisted admin account.',
+      });
+    }
+
     const { name, email, password, jurisdiction_name, lgd_jurisdiction_code } = req.body || {};
     if (!name || !email || !password || !jurisdiction_name) {
       return res.status(400).json({ error: 'name, email, password, jurisdiction_name are required' });
@@ -542,14 +549,22 @@ router.post('/sub-admins', verifyAdminJWT, async (req, res) => {
         role: childRole,
         jurisdiction_name,
         lgd_jurisdiction_code: lgd_jurisdiction_code || null,
-        parent_admin_id: req.admin.id,
-        created_by: req.admin.id,
+        parent_admin_id: creator.id,
+        created_by: creator.id,
         is_active: true,
       })
       .select('id,name,email,role,jurisdiction_name,lgd_jurisdiction_code,is_active,created_at,parent_admin_id,jurisdiction_geom')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'Email is already registered for another admin' });
+      }
+      if (error.code === '23503') {
+        return res.status(400).json({ error: 'Invalid parent admin mapping. Please login again.' });
+      }
+      throw error;
+    }
     const geometry = await resolveAdminJurisdictionGeometry(data.role, data.lgd_jurisdiction_code, data.jurisdiction_name);
     if (geometry) {
       const { error: geomErr } = await supabaseAdmin

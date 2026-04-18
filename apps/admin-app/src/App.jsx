@@ -10,10 +10,10 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
-    if (!admin) {
+    if (!admin && location.pathname !== '/login') {
       dispatch(initAdmin());
     }
-  }, [admin, dispatch]);
+  }, [admin, dispatch, location.pathname]);
 
   useEffect(() => {
     const baseTitle = 'GramWaste Connect Admin';

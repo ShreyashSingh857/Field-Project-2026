@@ -1,30 +1,55 @@
 import api from '../../services/axiosInstance';
 
+function unwrapApiError(err) {
+  const message = err?.response?.data?.error || err?.response?.data?.message || err?.message;
+  throw new Error(message || 'Request failed');
+}
+
 export async function fetchBins(filters = {}) {
-  const params = { ...filters };
-  const { data } = await api.get('/bins', { params });
-  return data?.bins || [];
+  try {
+    const params = { ...filters };
+    const { data } = await api.get('/bins', { params });
+    return data?.bins || [];
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function createBin(binData) {
-  const { data } = await api.post('/bins', binData);
-  return data;
+  try {
+    const { data } = await api.post('/bins', binData);
+    return data;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function updateBin(binId, updates) {
-  const { data } = await api.patch(`/bins/${binId}`, updates);
-  return data;
+  try {
+    const { data } = await api.patch(`/bins/${binId}`, updates);
+    return data;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function fetchWardSubAdmins() {
-  const { data } = await api.get('/admin/ward-subadmins');
-  return data?.wardMembers || [];
+  try {
+    const { data } = await api.get('/admin/ward-subadmins');
+    return data?.wardMembers || [];
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function saveWardJurisdiction(wardId, geometry, parentBoundaryGeometry = null) {
-  const { data } = await api.put(`/admin/ward-subadmins/${wardId}/jurisdiction`, {
-    geometry,
-    parentBoundaryGeometry,
-  });
-  return data?.wardMember || null;
+  try {
+    const { data } = await api.put(`/admin/ward-subadmins/${wardId}/jurisdiction`, {
+      geometry,
+      parentBoundaryGeometry,
+    });
+    return data?.wardMember || null;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }

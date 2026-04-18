@@ -14,7 +14,15 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       sessionStorage.removeItem('worker_token');
       sessionStorage.removeItem('token');
-      window.location.href = '/login';
+
+      const currentPath = window.location.pathname || '/';
+      const reqUrl = String(error.config?.url || '');
+      const isAlreadyOnLogin = currentPath === '/login';
+      const isAuthCall = reqUrl.includes('/workers/login') || reqUrl.includes('/workers/logout');
+
+      if (!isAlreadyOnLogin && !isAuthCall) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

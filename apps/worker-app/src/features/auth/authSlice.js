@@ -52,6 +52,11 @@ const authSlice = createSlice({
         }
         state.bootstrapped = true;
       })
+      .addCase(bootstrapSession.rejected, (state) => {
+        state.worker = null;
+        state.token = null;
+        state.bootstrapped = true;
+      })
       .addCase(login.pending, (state) => {
         state.loading = true;
         state.error = null;

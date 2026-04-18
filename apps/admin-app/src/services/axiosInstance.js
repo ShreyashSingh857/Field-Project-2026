@@ -11,6 +11,15 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('admin_token');
             localStorage.removeItem('admin_user');
+
+            const currentPath = window.location.pathname || '/';
+            const reqUrl = String(error.config?.url || '');
+            const isAlreadyOnLogin = currentPath === '/login';
+            const isAuthCall = reqUrl.includes('/admin/login') || reqUrl.includes('/admin/logout');
+
+            if (!isAlreadyOnLogin && !isAuthCall) {
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }

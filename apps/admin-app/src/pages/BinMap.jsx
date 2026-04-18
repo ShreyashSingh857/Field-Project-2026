@@ -70,6 +70,36 @@ function computeBounds(features) {
     return L.latLngBounds(pts);
 }
 
+function pointInRing(point, ring) {
+    const [x, y] = point;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        const intersects = (yi > y) !== (yj > y)
+            && x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi;
+        if (intersects) inside = !inside;
+    }
+    return inside;
+}
+
+function pointInGeometry(point, geometry) {
+    if (!geometry?.type || !geometry?.coordinates) return false;
+    if (geometry.type === 'Polygon') {
+        const [outer, ...holes] = geometry.coordinates;
+        if (!outer || !pointInRing(point, outer)) return false;
+        return !holes.some((hole) => pointInRing(point, hole));
+    }
+    if (geometry.type === 'MultiPolygon') {
+        return geometry.coordinates.some((poly) => {
+            const [outer, ...holes] = poly;
+            if (!outer || !pointInRing(point, outer)) return false;
+            return !holes.some((hole) => pointInRing(point, hole));
+        });
+    }
+    return false;
+}
+
 function BinMap() {
     const role = useSelector(selectRole);
     const adminId = useSelector(selectAdminId);
@@ -173,6 +203,18 @@ function BinMap() {
             showToast('Select a point and enter bin label', 'error');
             return;
         }
+
+        if (role === 'ward_member') {
+            const guardGeometry = parentBoundary?.geometry || jurisdictionBoundary?.geometry || null;
+            if (guardGeometry) {
+                const isInside = pointInGeometry([pendingPoint.lng, pendingPoint.lat], guardGeometry);
+                if (!isInside) {
+                    showToast('Selected point is outside your allowed jurisdiction boundary', 'error');
+                    return;
+                }
+            }
+        }
+
         try {
             await createBin({
                 label: newBin.label,

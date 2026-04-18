@@ -37,6 +37,22 @@ async function getWorkerContact(workerId) {
 	return data || null;
 }
 
+async function checkTaskOwnership(taskId, workerId) {
+	const { data: task, error } = await supabaseAdmin
+		.from('tasks')
+		.select('id,assigned_worker_id')
+		.eq('id', taskId)
+		.maybeSingle();
+
+	if (error) throw error;
+	if (!task) return { ok: false, status: 404, message: 'Task not found' };
+	if (String(task.assigned_worker_id) !== String(workerId)) {
+		return { ok: false, status: 403, message: 'This task is not assigned to you' };
+	}
+
+	return { ok: true };
+}
+
 async function uploadTaskProof(file, taskId) {
 	if (!file) return null;
 
@@ -104,12 +120,13 @@ export async function startTask(req, res) {
 			return res.status(400).json({ error: 'Missing worker context in token metadata or request' });
 		}
 
+		const ownership = await checkTaskOwnership(req.params.id, workerId);
+		if (!ownership.ok) {
+			return res.status(ownership.status).json({ error: ownership.message });
+		}
+
 		const existingTask = await getTaskById(req.params.id);
 		if (!existingTask) return res.status(404).json({ error: 'Task not found' });
-
-		if (String(existingTask.assigned_worker_id) !== String(workerId)) {
-			return res.status(403).json({ error: 'This task is not assigned to you' });
-		}
 
 		const task = await startTaskById({ taskId: req.params.id, workerId });
 
@@ -149,12 +166,13 @@ export async function completeTask(req, res) {
 			return res.status(400).json({ error: 'Missing worker context in token metadata or request' });
 		}
 
+		const ownership = await checkTaskOwnership(req.params.id, workerId);
+		if (!ownership.ok) {
+			return res.status(ownership.status).json({ error: ownership.message });
+		}
+
 		const existingTask = await getTaskById(req.params.id);
 		if (!existingTask) return res.status(404).json({ error: 'Task not found' });
-
-		if (String(existingTask.assigned_worker_id) !== String(workerId)) {
-			return res.status(403).json({ error: 'This task is not assigned to you' });
-		}
 
 		const beforeFile = req.files?.before_photo?.[0] || null;
 		const afterFile = req.files?.after_photo?.[0] || null;

@@ -4,8 +4,8 @@ export function getRequestToken(req, preferredCookieName) {
     return auth.slice(7);
   }
 
-  if (preferredCookieName && req.cookies?.[preferredCookieName]) {
-    return req.cookies[preferredCookieName];
+  if (preferredCookieName) {
+    return req.cookies?.[preferredCookieName] || '';
   }
 
   return req.cookies?.admin_token

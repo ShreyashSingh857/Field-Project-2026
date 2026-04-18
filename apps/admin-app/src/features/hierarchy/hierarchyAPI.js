@@ -1,18 +1,35 @@
 import api from '../../services/axiosInstance';
 
+function unwrapApiError(err) {
+  const message = err?.response?.data?.error || err?.response?.data?.message || err?.message;
+  throw new Error(message || 'Request failed');
+}
+
 export async function fetchSubAdmins() {
-  const { data } = await api.get('/admin/sub-admins');
-  return data?.admins || [];
+  try {
+    const { data } = await api.get('/admin/sub-admins');
+    return data?.admins || [];
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function createSubAdmin(subAdminData) {
-  const { data } = await api.post('/admin/sub-admins', subAdminData);
-  return data?.admin || data;
+  try {
+    const { data } = await api.post('/admin/sub-admins', subAdminData);
+    return data?.admin || data;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function deactivateSubAdmin(subAdminId) {
-  const { data } = await api.delete(`/admin/sub-admins/${subAdminId}`);
-  return data?.admin || data;
+  try {
+    const { data } = await api.delete(`/admin/sub-admins/${subAdminId}`);
+    return data?.admin || data;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function getHierarchyTree() {
@@ -21,8 +38,12 @@ export async function getHierarchyTree() {
 }
 
 export async function updateSubAdmin(subAdminId, updates) {
-  const { data } = await api.patch(`/admin/sub-admins/${subAdminId}`, updates);
-  return data?.admin || data;
+  try {
+    const { data } = await api.patch(`/admin/sub-admins/${subAdminId}`, updates);
+    return data?.admin || data;
+  } catch (err) {
+    return unwrapApiError(err);
+  }
 }
 
 export async function getSubAdminById(adminId) {
